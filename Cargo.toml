@@ -1,0 +1,11 @@
+[package]
+name = "physics_basic"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+fixed = "1.28.0"
+cordic = "0.1.5"
+wacky_bag = {path="../wacky_bag"}
+rand = "0.8.5"
