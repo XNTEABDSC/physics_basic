@@ -1,4 +1,4 @@
-use std::{cell::LazyCell, f64};
+use std::cell::LazyCell;
 
 //pub type Num=fixed::types::I32F32;
 use crate::num::*;
