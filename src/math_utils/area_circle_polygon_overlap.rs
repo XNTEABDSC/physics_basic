@@ -1,4 +1,4 @@
-use std::{cell::LazyCell, f64};
+use std::cell::LazyCell;
 
 //pub type Num=fixed::types::I32F32;
 use crate::num::*;
@@ -248,7 +248,7 @@ fn test_area_circle_rectangle() {
 /// - `d`: X-coordinate of the vertical leg of the triangle.
 /// - `y1`, `y2`: Y-coordinates defining the triangle's vertical segment at x = d.
 /// Returns the signed overlap area; negative if y1 < y2 and the orientation is reversed.
-pub fn area_circle_triangle_old(r:Num,r_sq:Num,mut d:Num,mut y1:Num,mut y2:Num)->Num{
+fn area_circle_triangle_old(r:Num,r_sq:Num,mut d:Num,mut y1:Num,mut y2:Num)->Num{
     
     if d.is_zero(){
         return Num::ZERO;
@@ -377,7 +377,7 @@ fn test_area_circle_triangle_old(){
     return area
  */
 
-pub fn area_circle_rectangle_old(r:Num,r_sq:Num,x1:Num,y1:Num,x2:Num,y2:Num)->Num {
+fn area_circle_rectangle_old(r:Num,r_sq:Num,x1:Num,y1:Num,x2:Num,y2:Num)->Num {
     let area1=area_circle_triangle_old(r, r_sq, y1.wrapping_neg(), x1, x2);
     let area2=area_circle_triangle_old(r, r_sq, x2, y1, y2);
     let area3=area_circle_triangle_old(r, r_sq, y2, x2.wrapping_neg(), x1.wrapping_neg());
