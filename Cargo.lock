@@ -88,6 +88,7 @@ dependencies = [
  "fixed",
  "rand",
  "wacky_bag",
+ "wacky_bag_fixed",
 ]
 
 [[package]]
@@ -175,6 +176,16 @@ name = "wacky_bag"
 version = "0.1.0"
 dependencies = [
  "lazy_static",
+]
+
+[[package]]
+name = "wacky_bag_fixed"
+version = "0.1.0"
+dependencies = [
+ "cordic",
+ "fixed",
+ "rand",
+ "wacky_bag",
 ]
 
 [[package]]

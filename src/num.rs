@@ -1,1 +1,1 @@
-pub type Num=fixed::types::I32F32;
+pub use wacky_bag_fixed::num::*;
