@@ -49,3 +49,4 @@ pub struct DirVec(pub Vec2Fix);
 pub struct Kinetic(pub Num);
 
 derive_add_traits!(Kinetic);
+
