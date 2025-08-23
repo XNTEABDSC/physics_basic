@@ -1,52 +1,56 @@
 use wacky_bag::derive_add_traits;
+use wacky_bag_fixed::vec_fix::VecFix;
 
-use crate::{num::Num, vec2_fix::Vec2Fix};
+use crate::{num::Num};
 
 
 #[derive(Default,Clone,Copy,Debug)]
 pub struct Mass(pub Num);
 
-derive_add_traits!(Mass);
+//derive_add_traits!{Mass}
 
 #[derive(Default,Clone,Copy,Debug)]
-pub struct Pos(pub Vec2Fix);
+pub struct Pos<const DIM:usize>(pub VecFix<DIM>);
 
-derive_add_traits!(Pos);
+//derive_add_traits!(Pos<1>);
+//derive_add_traits!(Pos<2>);
+//derive_add_traits!(Pos<3>);
+//derive_add_traits!(Pos<4>);
 
 #[derive(Default,Clone,Copy,Debug)]
-pub struct Vel(pub Vec2Fix);
+pub struct Vel<const DIM:usize>(pub VecFix<DIM>);
 
-derive_add_traits!(Vel);
+//derive_add_traits!(Vel);
 
 
 #[derive(Default,Clone,Copy,Debug)]
 pub struct Dir(pub Num);
 
-derive_add_traits!(Dir);
+//derive_add_traits!(Dir);
 
 
 #[derive(Default,Clone,Copy,Debug)]
 pub struct Agv(pub Num);
 
-derive_add_traits!(Agv);
+//derive_add_traits!(Agv);
 
 
 #[derive(Default,Clone,Copy,Debug)]
 pub struct Energy(pub Num);
 
-derive_add_traits!(Energy);
+//derive_add_traits!(Energy);
 
 
 #[derive(Default,Clone,Copy,Debug)]
-pub struct Momentum(pub Vec2Fix);
+pub struct Momentum(pub VecFix2);
 
-derive_add_traits!(Momentum);
+//derive_add_traits!(Momentum);
 
 #[derive(Default,Clone,Copy,Debug)]
-pub struct DirVec(pub Vec2Fix);
+pub struct DirVec(pub VecFix2);
 
 #[derive(Default, Clone, Copy, Debug)]
 pub struct Kinetic(pub Num);
 
-derive_add_traits!(Kinetic);
+//derive_add_traits!(Kinetic);
 

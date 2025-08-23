@@ -9,7 +9,7 @@ pub struct ShapeCircle{
 }
 
 impl ShapeCircle {
-    pub fn with_radius(radius:Num)->Self {
+    pub fn from_radius(radius:Num)->Self {
         return Self{
             radius,
             radius_sq:radius*radius
