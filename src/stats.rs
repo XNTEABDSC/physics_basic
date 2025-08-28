@@ -1,4 +1,4 @@
-use wacky_bag::derive_add_traits;
+use wacky_bag::{derive_add_traits, structures::cmatrix::CMatrix};
 use wacky_bag_fixed::vec_fix::VecFix;
 
 use crate::{num::Num};
@@ -6,6 +6,8 @@ use crate::{num::Num};
 
 #[derive(Default,Clone,Copy,Debug)]
 pub struct Mass(pub Num);
+
+
 
 //derive_add_traits!{Mass}
 
@@ -24,13 +26,13 @@ pub struct Vel<const DIM:usize>(pub VecFix<DIM>);
 
 
 #[derive(Default,Clone,Copy,Debug)]
-pub struct Dir(pub Num);
+pub struct DirVec<const DIM:usize>(pub VecFix<DIM>);
 
 //derive_add_traits!(Dir);
 
 
 #[derive(Default,Clone,Copy,Debug)]
-pub struct Agv(pub Num);
+pub struct Agv<const DIM:usize>(pub CMatrix<Num,DIM,DIM>);
 
 //derive_add_traits!(Agv);
 
@@ -42,12 +44,9 @@ pub struct Energy(pub Num);
 
 
 #[derive(Default,Clone,Copy,Debug)]
-pub struct Momentum(pub VecFix2);
+pub struct Momentum<const DIM:usize>(pub VecFix<DIM>);
 
 //derive_add_traits!(Momentum);
-
-#[derive(Default,Clone,Copy,Debug)]
-pub struct DirVec(pub VecFix2);
 
 #[derive(Default, Clone, Copy, Debug)]
 pub struct Kinetic(pub Num);
