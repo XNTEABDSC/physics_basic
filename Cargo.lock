@@ -80,7 +80,6 @@ dependencies = [
  "az",
  "bytemuck",
  "half",
- "num-traits",
  "typenum",
 ]
 
@@ -378,9 +377,13 @@ dependencies = [
  "cordic",
  "derive_more",
  "fixed",
+ "frunk",
+ "nalgebra",
+ "num-traits",
  "rand",
+ "simba",
+ "typenum",
  "wacky_bag",
- "wacky_bag_fixed",
 ]
 
 [[package]]
@@ -541,18 +544,9 @@ name = "wacky_bag"
 version = "0.1.0"
 dependencies = [
  "frunk",
+ "num-traits",
+ "simba",
  "wacky_bag_macro",
-]
-
-[[package]]
-name = "wacky_bag_fixed"
-version = "0.1.0"
-dependencies = [
- "cordic",
- "fixed",
- "nalgebra",
- "rand",
- "wacky_bag",
 ]
 
 [[package]]

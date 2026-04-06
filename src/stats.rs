@@ -1,25 +1,51 @@
 
-use wacky_bag_fixed::vec_fix::VecFix;
+use nalgebra::{RealField, SVector, Scalar};
+use num_traits::Zero;
+// use wacky_bag_fixed::vec_fix::VecFix;
 
 use derive_more::{Add,AddAssign,Sub,SubAssign,Neg};
 
-use crate::{num::Num};
+// use crate::{num::Num};
 
 
 
 
 
 #[derive(Default,Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
-pub struct Mass(pub Num);
-#[derive(Default,Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
-pub struct TimePass(pub Num);
+pub struct Mass<Num>(pub Num);
 
-macro_rules! derive_default_as_zeros {
+/// Time pass of this object for this iteration of simulation
+#[derive(Default,Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
+pub struct TimePass<Num>(pub Num);
+
+macro_rules! derive_for_s_vector {
     ($type:tt) => {
-impl<const DIM:usize> Default for $type <DIM>{
+impl<Num,const DIM:usize> Default for $type <Num,DIM>
+	where Num:RealField
+{
     fn default() -> Self {
-        Self(VecFix::<DIM>::zeros())
+        Self(SVector::zeros())
     }
+}
+
+impl<Num,const DIM:usize> Zero for $type <Num,DIM> 
+	where Num:RealField
+{
+	fn zero() -> Self {
+		Self(SVector::zero())
+	}
+
+	fn is_zero(&self) -> bool {
+		self.0.is_zero()
+	}
+}
+
+impl<Num: std::ops::Neg+Scalar+simba::scalar::ClosedNeg, const DIM: usize> std::ops::Neg for $type <Num, DIM> {
+    type Output=Self;
+
+	fn neg(self) -> Self::Output {
+		Self(self.0.neg())
+	}
 }
     };
 }
@@ -27,27 +53,35 @@ impl<const DIM:usize> Default for $type <DIM>{
 
 //derive_add_traits!{Mass}
 
-#[derive(Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
-pub struct Pos<const DIM:usize>(pub VecFix<DIM>);
+#[derive(Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign)]
+pub struct Pos<Num,const DIM:usize>(pub SVector<Num,DIM>);
+	// where Num:RealField;
 
-derive_default_as_zeros!{Pos}
-
+derive_for_s_vector!{Pos}
 
 //derive_add_traits!(Pos<1>);
 //derive_add_traits!(Pos<2>);
 //derive_add_traits!(Pos<3>);
 //derive_add_traits!(Pos<4>);
 
-#[derive(Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
-pub struct Vel<const DIM:usize>(pub VecFix<DIM>);
+#[derive(Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign)]
+pub struct Vel<Num,const DIM:usize>(pub SVector<Num,DIM>);
 
-derive_default_as_zeros!{Vel}
+derive_for_s_vector!{Vel}
 
 //derive_add_traits!(Vel);
 
 
 #[derive(Clone,Copy,Debug)]
-pub struct DirVec<const DIM:usize>(pub VecFix<DIM>);
+pub struct DirVec<Num,const DIM:usize>(pub SVector<Num,DIM>);
+
+impl<Num,const DIM:usize> Default for DirVec<Num,DIM>
+	where Num:RealField
+{
+    fn default() -> Self {
+        Self(SVector::zeros())
+    }
+}
 
 //derive_add_traits!(Dir);
 
@@ -59,23 +93,23 @@ pub struct Agv<const DIM:usize>(pub CMatrix<Num,DIM,DIM>);
  */
 
 #[derive(Default,Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
-pub struct Energy(pub Num);
+pub struct Energy<Num>(pub Num);
 
 
 
 //derive_add_traits!(Energy);
 
 
-#[derive(Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
-pub struct Momentum<const DIM:usize>(pub VecFix<DIM>);
+#[derive(Clone, Copy, Debug, Add, AddAssign, Sub, SubAssign)]
+pub struct Momentum<Num,const DIM:usize>(pub SVector<Num,DIM>);
 
 
-derive_default_as_zeros!{Momentum}
+derive_for_s_vector!{Momentum}
 
 //derive_add_traits!(Momentum);
 
 #[derive(Default, Clone, Copy, Debug,Add,AddAssign,Sub,SubAssign,Neg)]
-pub struct Kinetic(pub Num);
+pub struct Kinetic<Num>(pub Num);
 
 //derive_add_traits!(Kinetic);
 
