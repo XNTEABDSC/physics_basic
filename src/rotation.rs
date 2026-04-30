@@ -9,6 +9,7 @@ use nalgebra::{
     Const, DefaultAllocator, DimMin, DimName, LU, OMatrix, OVector, RealField, SMatrix, SVector,
     ToConst, ToTypenum, allocator::Allocator,
 };
+use num_traits::Zero;
 use typenum::{U0, U1, U2};
 
 // use simba::scalar::FixedI32F32;
@@ -55,6 +56,17 @@ impl<Num: RealField, const DIM: usize> Default for AngularMomentum<Num, DIM> {
 	}
 }
 
+impl<Num: RealField, const DIM: usize> Zero for AngularMomentum<Num, DIM> {
+	
+	fn zero() -> Self {
+		Self(SMatrix::<Num, DIM, DIM>::zeros())
+	}
+	
+	fn is_zero(&self) -> bool {
+		self.0.is_zero()
+	}
+}
+
 #[derive(Clone, Copy, Debug, Mul, MulAssign)]
 pub struct Rotation<Num: RealField, const DIM: usize>(pub SMatrix<Num, DIM, DIM>);
 
@@ -80,6 +92,23 @@ where
 	fn default() -> Self {
 		Self(OMatrix::<Num, DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>::zeros())
 	}
+}
+
+impl<Num: RealField + Copy, const DIM: usize> Zero for AngularInertia<Num, DIM>
+where
+	Const<DIM>: DimNameToSoDimName,
+	DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>
+{
+	fn zero() -> Self {
+		Self(OMatrix::<Num, DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>::zeros())
+	}
+
+	fn is_zero(&self) -> bool {
+		self.0.is_zero()
+	}
+	// fn default() -> Self {
+	// 	Self(OMatrix::<Num, DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>::zeros())
+	// }
 }
 
 impl<Num: RealField+Copy, const DIM: usize> Copy for AngularInertia<Num,DIM>
@@ -124,6 +153,18 @@ impl<Num: RealField, const DIM: usize> Default for RotationDelta<Num, DIM> {
         Self(SMatrix::<Num, DIM, DIM>::zeros())
     }
 }
+
+impl<Num: RealField, const DIM: usize> Zero for RotationDelta<Num, DIM> {
+	
+	fn zero() -> Self {
+		Self(SMatrix::<Num, DIM, DIM>::zeros())
+	}
+	
+	fn is_zero(&self) -> bool {
+		self.0.is_zero()
+	}
+}
+
 
 pub fn angular_vel_to_rotation<Num: RealField, const DIM: usize>(
     agv: &AngularVel<Num, DIM>,

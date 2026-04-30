@@ -14,6 +14,30 @@ use derive_more::{Add,AddAssign,Sub,SubAssign,Neg};
 #[derive(Default,Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
 pub struct Mass<Num>(pub Num);
 
+impl<Num:Zero> Zero for Mass<Num> {
+	fn zero() -> Self {
+		Self(Num::zero())
+	}
+
+	fn is_zero(&self) -> bool {
+		Num::is_zero(&self.0)
+	}
+}
+
+macro_rules! derive_zero {
+	($t:tt) => {
+impl<Num:Zero> Zero for $t<Num> {
+	fn zero() -> Self {
+		Self(Num::zero())
+	}
+
+	fn is_zero(&self) -> bool {
+		Num::is_zero(&self.0)
+	}
+}
+	};
+}
+
 // impl Zero for Mass<> {
 	
 // }
@@ -21,6 +45,8 @@ pub struct Mass<Num>(pub Num);
 /// Time pass of this object for this iteration of simulation
 #[derive(Default,Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
 pub struct TimePass<Num>(pub Num);
+
+derive_zero!(TimePass);
 
 macro_rules! derive_for_s_vector {
     ($type:tt) => {
@@ -99,6 +125,7 @@ pub struct Agv<const DIM:usize>(pub CMatrix<Num,DIM,DIM>);
 #[derive(Default,Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
 pub struct Energy<Num>(pub Num);
 
+derive_zero!(Energy);
 
 
 //derive_add_traits!(Energy);
@@ -114,6 +141,9 @@ derive_for_s_vector!{Momentum}
 
 #[derive(Default, Clone, Copy, Debug,Add,AddAssign,Sub,SubAssign,Neg)]
 pub struct Kinetic<Num>(pub Num);
+
+
+derive_zero!(Kinetic);
 
 //derive_add_traits!(Kinetic);
 
