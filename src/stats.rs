@@ -1,8 +1,9 @@
 
+use frunk::{HList, hlist, hlist_pat};
 use nalgebra::{RealField, SVector, Scalar};
 use num_traits::Zero;
 // use wacky_bag_fixed::vec_fix::VecFix;
-
+use wacky_bag::utils::num_extend::NumExtends;
 use derive_more::{Add,AddAssign,Sub,SubAssign,Neg};
 
 // use crate::{num::Num};
@@ -142,8 +143,14 @@ derive_for_s_vector!{Momentum}
 #[derive(Default, Clone, Copy, Debug,Add,AddAssign,Sub,SubAssign,Neg)]
 pub struct Kinetic<Num>(pub Num);
 
-
 derive_zero!(Kinetic);
+
+pub fn kinetic_from_mass_vel<Num:RealField+Copy,const DIM:usize>(hlist_pat![mass,vel]:HList!(&Mass<Num>,&Vel<Num,DIM>))->Kinetic<Num> {
+	let velsq=vel.0.dot(&vel.0);
+	Kinetic(
+		mass.0*velsq/Num::frac_1_2()
+	)
+}
 
 //derive_add_traits!(Kinetic);
 

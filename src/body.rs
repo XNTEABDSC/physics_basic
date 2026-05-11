@@ -3,23 +3,24 @@
 use frunk::{HList, hlist, hlist_pat};
 use nalgebra::allocator::Allocator;
 use nalgebra::{Const, DefaultAllocator, DimMin, DimName, Matrix, RealField, SMatrix};
+use num_traits::Zero;
 use wacky_bag::utils::h_list_helpers::{HToMut, HToRef};
 
-use crate::stats::{Mass,Momentum,Energy,Pos,TimePass,Vel};
-use crate::rotation::{AngularInertia, AngularMomentum, AngularVel, DimNameToSoDimName, DimNameToSoDimNameType, Rotation, RotationDelta, angular_velocity_from_momentum};
+use crate::stats::{Energy, Kinetic, Mass, Momentum, Pos, TimePass, Vel, kinetic_from_mass_vel};
+use crate::rotation::{AngularInertia, AngularKinetic, AngularMomentum, AngularVel, DimNameToSoDimName, DimNameToSoDimNameType, Rotation, RotationDelta, angular_kinetic_from_inertia_agv, angular_velocity_from_momentum};
 
 
 #[derive(Default, Clone, Copy, Debug)]
-pub struct ShapeCircle<Num:RealField>{
+pub struct ShapeCircle<Num:RealField,const DIM:usize>{
     pub radius:Num,
-    pub radius_sq:Num,
+    pub radius_pow:Num,
 }
 
-impl<Num:RealField+Copy+num_traits::Num> ShapeCircle<Num> {
+impl<Num:RealField+Copy+num_traits::Num,const DIM:usize> ShapeCircle<Num,DIM> {
     pub fn from_radius(radius:Num)->Self {
         return Self{
             radius,
-            radius_sq:radius*radius
+            radius_pow:radius.powi(DIM as i32)
         };
     }
 }
@@ -72,17 +73,18 @@ pub type PhyBodyFull<Num,const DIM:usize>=HList!(
 	Pos<Num,DIM>,
 	Vel<Num,DIM>,
 	Momentum<Num,DIM>,
+	Kinetic<Num>,
 	// Energy<Num>,
 	AngularInertia<Num,DIM>,
 	AngularMomentum<Num,DIM>,
 	AngularVel<Num,DIM>,
+	AngularKinetic<Num>,
 	Rotation<Num,DIM>,	
 );
 
 pub type CalculateBodyStateInput<Num,const DIM:usize>=HList!(Mass<Num>,Momentum<Num,DIM>,AngularInertia<Num,DIM>,AngularMomentum<Num,DIM>);
-pub type CalculateBodyStateOutput<Num,const DIM:usize>=HList!(Vel<Num,DIM>,AngularVel<Num,DIM>);
-
-pub fn calculate_body_state<Num,const DIM:usize>(hlist_pat![mass,momentum,agi,agm]:HToRef<CalculateBodyStateInput<Num,DIM>>)
+pub type CalculateBodyStateOutput<Num,const DIM:usize>=HList!(Vel<Num,DIM>,AngularVel<Num,DIM>,Kinetic<Num>,AngularKinetic<Num>);
+pub fn calculate_body_state<Num,const DIM:usize>(hlist_pat![mass,momentum,agi,agm] : HToRef<CalculateBodyStateInput<Num,DIM>>)
 ->CalculateBodyStateOutput<Num,DIM>
 where
 	Num:RealField+Copy,
@@ -92,8 +94,11 @@ where
         DimMin<DimNameToSoDimNameType<DIM>, Output = DimNameToSoDimNameType<DIM>>,
 
 {
-	let agv=angular_velocity_from_momentum(hlist![agi.clone(),&agm]).unwrap_or_else(||SMatrix::<Num,DIM,DIM>::zeros());
-	hlist![Vel(momentum.0/mass.0),AngularVel(agv)]
+	let agv=angular_velocity_from_momentum(hlist![agi.clone(),&agm]).unwrap_or_else(||Zero::zero());
+	let vel=Vel(momentum.0/mass.0);
+	let kinetic=kinetic_from_mass_vel(hlist![mass,&vel]);
+	let ag_kinetic=angular_kinetic_from_inertia_agv(hlist![agi.clone(),&agv]);
+	hlist![vel,agv,kinetic,ag_kinetic]
 }
 
 pub fn calculate_body_state_full<Num,const DIM:usize>(s:PhyBodyBasic<Num,DIM>)->PhyBodyFull<Num,DIM>
@@ -136,7 +141,7 @@ where
         DimMin<DimNameToSoDimNameType<DIM>, Output = DimNameToSoDimNameType<DIM>>,
 {
 	vel.0=momentum.0/mass.0;
-	agv.0=angular_velocity_from_momentum(hlist![agi.clone(),&agm]).unwrap_or_else(||SMatrix::<Num,DIM,DIM>::zeros());
+	*agv=angular_velocity_from_momentum(hlist![agi.clone(),&agm]).unwrap_or_else(||Zero::zero());
 }
 
 
@@ -150,9 +155,11 @@ pub fn calculate_body_state_full_inplace_m<Num,const DIM:usize>(hlist_pat![
 		pos,
 		vel,
 		momentum,
+		kinetic,
 		agi,
 		agm,
 		agv,
+		agk,
 		rot]:
 	HToMut<PhyBodyFull<Num,DIM>>)
 where

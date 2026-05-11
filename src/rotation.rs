@@ -4,14 +4,14 @@ use crate::{
     num::DimNameTrait, stat_to_change_type::StatToChangeType, stats::{Mass, Pos}
 };
 use derive_more::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
-use frunk::{HList, hlist_pat};
+use frunk::{HList, hlist, hlist_pat};
 use nalgebra::{
     Const, DefaultAllocator, DimMin, DimName, LU, OMatrix, OVector, RealField, SMatrix, SVector,
     ToConst, ToTypenum, allocator::Allocator,
 };
 use num_traits::Zero;
 use typenum::{U0, U1, U2};
-
+use wacky_bag::utils::num_extend::NumExtends;
 // use simba::scalar::FixedI32F32;
 
 pub trait DimNameToSoDimName
@@ -46,6 +46,23 @@ pub type DimNameToSoDimNameType<const DIM: usize> = <Const<DIM> as DimNameToSoDi
 
 #[derive(Clone, Copy, Debug, Add, AddAssign, Sub, SubAssign, Neg)]
 pub struct AngularVel<Num: RealField, const DIM: usize>(pub SMatrix<Num, DIM, DIM>);
+
+impl<Num: RealField, const DIM: usize> Default for AngularVel<Num, DIM> {
+	fn default() -> Self {
+		Self(SMatrix::<Num, DIM, DIM>::zeros())
+	}
+}
+
+impl<Num: RealField, const DIM: usize> Zero for AngularVel<Num, DIM> {
+	
+	fn zero() -> Self {
+		Self(SMatrix::<Num, DIM, DIM>::zeros())
+	}
+	
+	fn is_zero(&self) -> bool {
+		self.0.is_zero()
+	}
+}
 
 #[derive(Clone, Copy, Debug, Add, AddAssign, Sub, SubAssign, Neg)]
 pub struct AngularMomentum<Num: RealField, const DIM: usize>(pub SMatrix<Num, DIM, DIM>);
@@ -330,7 +347,7 @@ where
 /// 返回 `None` 若转动惯量矩阵奇异（刚体可绕某些轴自由旋转）
 pub fn angular_velocity_from_momentum<T: RealField + Copy, const DIM: usize>(
     hlist_pat![total_inertia, angular_momentum]: HList!(AngularInertia<T,DIM>,&AngularMomentum<T, DIM>),
-) -> Option<SMatrix<T, DIM, DIM>>
+) -> Option<AngularVel<T,DIM>>
 where
     Const<DIM>: DimNameToSoDimName + DimName,
     DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>>
@@ -338,8 +355,9 @@ where
     DimNameToSoDimNameType<DIM>:
         DimMin<DimNameToSoDimNameType<DIM>, Output = DimNameToSoDimNameType<DIM>>,
 {
+	
     angular_velocity_from_momentum_(&so_to_vec(&angular_momentum.0), total_inertia.0)
-        .map(|v| vec_to_so(&v))
+        .map(|v| AngularVel(vec_to_so(&v)))
 }
 
 /// 计算 D 维均匀超球体（半径为 r）的转动惯量。
@@ -390,6 +408,33 @@ where
         }
     }
     AngularInertia(mat)
+}
+
+#[derive(Default, Clone, Copy, Debug,Add,AddAssign,Sub,SubAssign,Neg)]
+pub struct AngularKinetic<Num>(pub Num);
+
+impl <Num: Zero>Zero for AngularKinetic<Num>{
+    fn zero() -> Self {
+        Self(Num::zero())
+    }
+    fn is_zero(&self) -> bool {
+        Num::is_zero(&self.0)
+    }
+}
+
+/// 基于角速度向量（反对称矩阵）和转动惯量计算转动动能。
+/// 动能 = 1/2 * ω_vecᵀ · I · ω_vec
+pub fn angular_kinetic_from_inertia_agv<Num: RealField + Copy, const DIM: usize>(
+	hlist_pat![inertia, angular_vel]: HList!(AngularInertia<Num,DIM>,&AngularVel<Num, DIM>),
+) -> AngularKinetic<Num>
+where
+    Const<DIM>: DimNameToSoDimName + DimName,
+    DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>> + Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>,
+{
+    let omega_vec = so_to_vec(&angular_vel.0);
+    let i_omega = &inertia.0 * omega_vec.clone();
+    let half = Num::p2();
+    AngularKinetic( half * omega_vec.dot(&i_omega) )
 }
 
 #[cfg(test)]
@@ -444,7 +489,7 @@ mod tests {
         assert_relative_eq!(angular_momentum.0[(1, 0)], -expected_l12, epsilon = 1e-12);
 
         // 反解角速度
-        let solved_omega = angular_velocity_from_momentum(hlist!(total_inertia, &angular_momentum))
+        let AngularVel(solved_omega) = angular_velocity_from_momentum(hlist!(total_inertia, &angular_momentum))
             .expect("Should be invertible");
         assert_relative_eq!(solved_omega[(0, 1)], angular_vel.0[(0, 1)], epsilon = 1e-12);
         assert_relative_eq!(solved_omega[(1, 0)], angular_vel.0[(1, 0)], epsilon = 1e-12);
@@ -505,7 +550,7 @@ mod tests {
         assert_relative_eq!(angular_momentum.0, expected, epsilon = 1e-12);
 
         // 反解
-        let solved_omega = angular_velocity_from_momentum(hlist!(total_inertia, &angular_momentum))
+        let AngularVel(solved_omega) = angular_velocity_from_momentum(hlist!(total_inertia, &angular_momentum))
             .expect("Should be invertible");
         assert_relative_eq!(solved_omega, omega_mat, epsilon = 1e-12);
     }
@@ -545,7 +590,7 @@ mod tests {
         assert_relative_eq!(angular_momentum.0, expected_omega_mat, epsilon = 1e-12);
 
         // 反解
-        let solved_omega = angular_velocity_from_momentum(hlist!(total_inertia, &angular_momentum))
+        let AngularVel(solved_omega) = angular_velocity_from_momentum(hlist!(total_inertia, &angular_momentum))
             .expect("Should be invertible");
         assert_relative_eq!(solved_omega, omega_mat, epsilon = 1e-12);
     }
