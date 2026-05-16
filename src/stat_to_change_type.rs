@@ -1,7 +1,8 @@
 use std::{marker::PhantomData, ops::AddAssign};
 
 use frunk::Func;
-use wacky_bag::utils::type_fn::TypeFunc;
+use num_traits::Zero;
+use wacky_bag::utils::{h_list_helpers::{HTypeMapP, HZip}, type_fn::TypeFunc};
 
 pub trait StatToChangeType<Marker>{
 	type ChangeType
@@ -13,7 +14,7 @@ pub trait StatToChangeType<Marker>{
 pub struct StatToChangeTypeAdd;
 
 impl<T> StatToChangeType<StatToChangeTypeAdd> for T
-where T:AddAssign<T>+Default
+where T:AddAssign<T>+Zero
 {
 	type ChangeType=Self;
 }
@@ -36,3 +37,16 @@ impl<T,M> Func<(PhantomData<T>,PhantomData<M>)> for MapStatToChangeTypeZ
 	}
 	
 }
+
+impl<T,M> Func<PhantomData<(T,M)>> for MapStatToChangeTypeZ 
+	where T:StatToChangeType<M>
+{
+	type Output=PhantomData<T::ChangeType>;
+	
+	fn call(i: PhantomData<(T,M)>) -> Self::Output {
+		Default::default()
+	}
+	
+}
+
+pub type HMapStatToChangeTypeZ<T,M>=HTypeMapP<HZip<T,M>,MapStatToChangeTypeZ>;

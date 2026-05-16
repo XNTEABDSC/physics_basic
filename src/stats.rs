@@ -145,12 +145,28 @@ pub struct Kinetic<Num>(pub Num);
 
 derive_zero!(Kinetic);
 
-pub fn kinetic_from_mass_vel<Num:RealField+Copy,const DIM:usize>(hlist_pat![mass,vel]:HList!(&Mass<Num>,&Vel<Num,DIM>))->Kinetic<Num> {
-	let velsq=vel.0.dot(&vel.0);
-	Kinetic(
-		mass.0*velsq/Num::frac_1_2()
-	)
+pub fn mass_vel_2_momentum<Num:RealField+Copy,const DIM:usize>(hlist_pat![mass,vel]:HList!(&Mass<Num>,&Vel<Num,DIM>))->HList!(Momentum<Num,DIM>) {
+	
+	hlist![
+		// Kinetic(mass.0*velsq/Num::frac_1_2())
+		Momentum(vel.0*mass.0)
+	]
 }
+
+pub fn mass_vel_2_kinetic<Num:RealField+Copy,const DIM:usize>(hlist_pat![mass,vel]:HList!(&Mass<Num>,&Vel<Num,DIM>))->HList!(Kinetic<Num>) {
+	let velsq=vel.0.dot(&vel.0);
+	hlist![
+		Kinetic(mass.0*velsq/Num::frac_1_2())
+	]
+}
+
+#[derive(Default,Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
+pub struct Volume<Num>(pub Num);
+
+derive_zero!(Volume);
+
+#[derive(Default, Clone, Copy, Debug)]
+pub struct Density<Num>(pub Num);
 
 //derive_add_traits!(Kinetic);
 

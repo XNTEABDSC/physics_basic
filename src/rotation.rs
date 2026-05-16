@@ -9,6 +9,7 @@ use nalgebra::{
     Const, DefaultAllocator, DimMin, DimName, LU, OMatrix, OVector, RealField, SMatrix, SVector,
     ToConst, ToTypenum, allocator::Allocator,
 };
+use name_type_for_fn::name_type;
 use num_traits::Zero;
 use typenum::{U0, U1, U2};
 use wacky_bag::utils::num_extend::NumExtends;
@@ -93,6 +94,8 @@ impl<Num: RealField, const DIM: usize> Default for Rotation<Num, DIM> {
     }
 }
 
+// pub trait AllocatorForSo<const DIM:usize> = Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>,Buffer :Send+Sync>;
+
 #[derive(Clone, Debug, Add, AddAssign, Sub, SubAssign, Neg)]
 pub struct AngularInertia<Num: RealField+Copy, const DIM: usize>(
     pub OMatrix<Num, DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>,
@@ -152,8 +155,7 @@ where
 pub struct RotationToRotationDelta;
 
 impl<Num: RealField, const DIM: usize> StatToChangeType<RotationToRotationDelta> for Rotation<Num,DIM> {
-	type ChangeType=RotationDelta<Num,DIM>
-	;
+	type ChangeType=RotationDelta<Num,DIM>;
 }
 
 impl<Num: RealField, const DIM: usize> AddAssign<AngularVel<Num, DIM>> for Rotation<Num, DIM>
@@ -308,18 +310,18 @@ where
 
 /// 根据角速度计算总角动量（反对称矩阵形式）
 pub fn angular_momentum_from_omega<T: RealField + Copy, const DIM: usize>(
-    hlist_pat![total_inertia, omega]: HList!(&AngularInertia<T,DIM>,&SMatrix<T, DIM, DIM>),
-) -> AngularMomentum<T, DIM>
+    hlist_pat![total_inertia, omega]: HList!(&AngularInertia<T,DIM>,&AngularVel<T, DIM>),
+) -> HList!(AngularMomentum<T, DIM>)
 //SMatrix<T, DIM, DIM>
 where
     Const<DIM>: DimNameToSoDimName + DimName,
     DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>>
         + Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>,
 {
-    let omega_vec = so_to_vec(omega);
+    let omega_vec = so_to_vec(&omega.0);
     let total_inertia = &total_inertia.0;
     let l_vec = total_inertia * omega_vec;
-    AngularMomentum(vec_to_so(&l_vec))
+    hlist![AngularMomentum(vec_to_so(&l_vec))]
 }
 
 /// 根据总角动量计算角速度（反对称矩阵形式）
@@ -343,11 +345,14 @@ where
     }
 }
 
+// pub where awd=Const<DIM>: DimNameToSoDimName + DimName;
+// pub trait DimSO = DimNameToSoDimName + DimName ;
+
 /// 根据总角动量计算角速度（反对称矩阵形式）
 /// 返回 `None` 若转动惯量矩阵奇异（刚体可绕某些轴自由旋转）
 pub fn angular_velocity_from_momentum<T: RealField + Copy, const DIM: usize>(
     hlist_pat![total_inertia, angular_momentum]: HList!(AngularInertia<T,DIM>,&AngularMomentum<T, DIM>),
-) -> Option<AngularVel<T,DIM>>
+) -> Option<HList!(AngularVel<T,DIM>)>
 where
     Const<DIM>: DimNameToSoDimName + DimName,
     DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>>
@@ -357,7 +362,7 @@ where
 {
 	
     angular_velocity_from_momentum_(&so_to_vec(&angular_momentum.0), total_inertia.0)
-        .map(|v| AngularVel(vec_to_so(&v)))
+        .map(|v| hlist![AngularVel(vec_to_so(&v))])
 }
 
 /// 计算 D 维均匀超球体（半径为 r）的转动惯量。
@@ -425,8 +430,8 @@ impl <Num: Zero>Zero for AngularKinetic<Num>{
 /// 基于角速度向量（反对称矩阵）和转动惯量计算转动动能。
 /// 动能 = 1/2 * ω_vecᵀ · I · ω_vec
 pub fn angular_kinetic_from_inertia_agv<Num: RealField + Copy, const DIM: usize>(
-	hlist_pat![inertia, angular_vel]: HList!(AngularInertia<Num,DIM>,&AngularVel<Num, DIM>),
-) -> AngularKinetic<Num>
+	hlist_pat![inertia, angular_vel]: HList!(&AngularInertia<Num,DIM>,&AngularVel<Num, DIM>),
+) -> HList!(AngularKinetic<Num>)
 where
     Const<DIM>: DimNameToSoDimName + DimName,
     DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>> + Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>,
@@ -434,7 +439,7 @@ where
     let omega_vec = so_to_vec(&angular_vel.0);
     let i_omega = &inertia.0 * omega_vec.clone();
     let half = Num::p2();
-    AngularKinetic( half * omega_vec.dot(&i_omega) )
+    hlist![AngularKinetic( half * omega_vec.dot(&i_omega) )]
 }
 
 #[cfg(test)]
@@ -478,7 +483,7 @@ mod tests {
         let total_inertia = total_inertia_matrix(objects);
 
         // 计算角动量
-        let angular_momentum = angular_momentum_from_omega(hlist!(&total_inertia, &angular_vel.0));
+        let hlist_pat![angular_momentum] = angular_momentum_from_omega(hlist!(&total_inertia, &angular_vel));
 
         // 理论值：对于 2D 单质点，角动量应为 m * r^2 * ω = 1 * 1^2 * 1 = 1
         // 反对称矩阵只有一个独立分量，即 L_{12} = -1？需要根据约定：
@@ -489,7 +494,7 @@ mod tests {
         assert_relative_eq!(angular_momentum.0[(1, 0)], -expected_l12, epsilon = 1e-12);
 
         // 反解角速度
-        let AngularVel(solved_omega) = angular_velocity_from_momentum(hlist!(total_inertia, &angular_momentum))
+        let hlist_pat![AngularVel(solved_omega)] = angular_velocity_from_momentum(hlist!(total_inertia, &angular_momentum))
             .expect("Should be invertible");
         assert_relative_eq!(solved_omega[(0, 1)], angular_vel.0[(0, 1)], epsilon = 1e-12);
         assert_relative_eq!(solved_omega[(1, 0)], angular_vel.0[(1, 0)], epsilon = 1e-12);
@@ -511,7 +516,7 @@ mod tests {
 
         let objects = vec![hlist!(&mass, &pos, &inertia)];
         let total_inertia = total_inertia_matrix(objects);
-        let angular_momentum = angular_momentum_from_omega(hlist!(&total_inertia, &angular_vel.0));
+        let hlist_pat![angular_momentum] = angular_momentum_from_omega(hlist!(&total_inertia, &angular_vel));
 
         // 单质点系统奇异，无法唯一确定角速度，应返回 None
         let result = angular_velocity_from_momentum(hlist!(total_inertia, &angular_momentum));
@@ -542,7 +547,7 @@ mod tests {
         omega_mat[(1, 0)] = 1.0;
         let angular_vel = AngularVel(omega_mat);
 
-        let angular_momentum = angular_momentum_from_omega(hlist!(&total_inertia, &angular_vel.0));
+        let hlist_pat![angular_momentum] = angular_momentum_from_omega(hlist!(&total_inertia, &angular_vel));
 
         // 理论角动量：L = m1 r1^2 ω + m2 r2^2 ω = (1*1^2 + 2*1^2) * 1 = 3，方向沿 z
         // 因此反对称矩阵应为 3 * omega_mat
@@ -550,7 +555,7 @@ mod tests {
         assert_relative_eq!(angular_momentum.0, expected, epsilon = 1e-12);
 
         // 反解
-        let AngularVel(solved_omega) = angular_velocity_from_momentum(hlist!(total_inertia, &angular_momentum))
+        let hlist_pat![AngularVel(solved_omega)] = angular_velocity_from_momentum(hlist!(total_inertia, &angular_momentum))
             .expect("Should be invertible");
         assert_relative_eq!(solved_omega, omega_mat, epsilon = 1e-12);
     }
@@ -582,7 +587,7 @@ mod tests {
         omega_mat[(1, 0)] = 1.0;
         let angular_vel = AngularVel(omega_mat);
 
-        let angular_momentum = angular_momentum_from_omega(hlist!(&total_inertia, &angular_vel.0));
+        let hlist_pat![angular_momentum] = angular_momentum_from_omega(hlist!(&total_inertia, &angular_vel));
 
         // 预期角动量：自转贡献 L_self = I * ω_vec，其中 ω_vec = so_to_vec(omega) = [-1, 0, 0]（因为 (0,1) 元素为 -1）
         // 所以 L_vec = [2*(-1), 1*0, 1*0] = [-2, 0, 0]，对应反对称矩阵：只有 (0,1) 分量为 -2
@@ -590,7 +595,7 @@ mod tests {
         assert_relative_eq!(angular_momentum.0, expected_omega_mat, epsilon = 1e-12);
 
         // 反解
-        let AngularVel(solved_omega) = angular_velocity_from_momentum(hlist!(total_inertia, &angular_momentum))
+        let hlist_pat![AngularVel(solved_omega)] = angular_velocity_from_momentum(hlist!(total_inertia, &angular_momentum))
             .expect("Should be invertible");
         assert_relative_eq!(solved_omega, omega_mat, epsilon = 1e-12);
     }

@@ -72,6 +72,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "either"
+version = "1.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
+
+[[package]]
 name = "fixed"
 version = "1.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -317,6 +323,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "name_type_for_fn"
+version = "0.1.0"
+dependencies = [
+ "name_type_for_fn_proc_macro",
+ "single_fn_static",
+]
+
+[[package]]
+name = "name_type_for_fn_proc_macro"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "single_fn_static",
+ "syn",
+]
+
+[[package]]
 name = "num-bigint"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -380,6 +404,7 @@ dependencies = [
  "fixed",
  "frunk",
  "nalgebra",
+ "name_type_for_fn",
  "num-traits",
  "rand",
  "simba",
@@ -518,6 +543,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "single_fn_static"
+version = "0.1.0"
+
+[[package]]
 name = "syn"
 version = "2.0.117"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -544,6 +573,8 @@ checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
 name = "wacky_bag"
 version = "0.1.0"
 dependencies = [
+ "approx",
+ "either",
  "frunk",
  "num-traits",
  "simba",
