@@ -1,7 +1,7 @@
 use std::ops::{Add, AddAssign, Div, Mul, Rem, Sub};
 
 use crate::{
-    num::DimNameTrait, stat_to_change_type::StatToChangeType, stats::{Mass, Pos}
+    stat_to_change_type::StatToChangeType, stats::{Mass, Pos}
 };
 use derive_more::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use frunk::{HList, hlist, hlist_pat};
@@ -9,7 +9,6 @@ use nalgebra::{
     Const, DefaultAllocator, DimMin, DimName, LU, OMatrix, OVector, RealField, SMatrix, SVector,
     ToConst, ToTypenum, allocator::Allocator,
 };
-use name_type_for_fn::name_type;
 use num_traits::Zero;
 use typenum::{U0, U1, U2};
 use wacky_bag::utils::num_extend::NumExtends;
@@ -400,7 +399,7 @@ where
     DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>> + Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>,
 {
     let twelve = T::from_usize(12).unwrap();
-    let n_so = DimNameToSoDimNameType::<DIM>::dim();
+    let _n_so = DimNameToSoDimNameType::<DIM>::dim();
     let mut mat = OMatrix::<T, DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>::zeros();
     let mut idx = 0;
     for i in 0..DIM {

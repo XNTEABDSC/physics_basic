@@ -4,13 +4,13 @@ use std::ops::Add;
 
 use frunk::{HList, Poly, hlist, hlist_pat};
 use nalgebra::allocator::Allocator;
-use nalgebra::{Const, DefaultAllocator, DimMin, DimName, Matrix, RealField, SMatrix};
+use nalgebra::{Const, DefaultAllocator, DimMin, DimName, RealField};
 use num_traits::Zero;
 use wacky_bag::utils::d_sphere_volume::d_sphere_volume_by_radius_pow;
 use wacky_bag::utils::h_list_helpers::{HToMut, HToRef, SetMut, Sum};
 
-use crate::stats::{Energy, Kinetic, Mass, Momentum, Pos, TimePass, Vel, Volume, mass_vel_2_kinetic};
-use crate::rotation::{AngularInertia, AngularKinetic, AngularMomentum, AngularVel, DimNameToSoDimName, DimNameToSoDimNameType, Rotation, RotationDelta, angular_kinetic_from_inertia_agv, angular_velocity_from_momentum};
+use crate::stats::{Kinetic, Mass, Momentum, Pos, TimePass, Vel, Volume, mass_vel_2_kinetic};
+use crate::rotation::{AngularInertia, AngularKinetic, AngularMomentum, AngularVel, DimNameToSoDimName, DimNameToSoDimNameType, Rotation, angular_kinetic_from_inertia_agv, angular_velocity_from_momentum};
 
 
 #[derive(Default, Clone, Copy, Debug)]
@@ -182,9 +182,9 @@ where
 }
 
 pub fn calculate_body_state_full_inplace_m<Num,const DIM:usize>(hlist_pat![
-		time,
+		_time,
 		mass,
-		pos,
+		_pos,
 		vel,
 		momentum,
 		kinetic,
@@ -192,7 +192,7 @@ pub fn calculate_body_state_full_inplace_m<Num,const DIM:usize>(hlist_pat![
 		agm,
 		agv,
 		agk,
-		rot]:
+		_rot]:
 	HToMut<PhyBodyFull<Num,DIM>>)
 where
 	Num:RealField+Copy,

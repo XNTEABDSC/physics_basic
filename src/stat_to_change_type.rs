@@ -32,7 +32,7 @@ impl<T,M> Func<(PhantomData<T>,PhantomData<M>)> for MapStatToChangeTypeZ
 {
 	type Output=PhantomData<T::ChangeType>;
 	
-	fn call(i: (PhantomData<T>,PhantomData<M>)) -> Self::Output {
+	fn call(_i: (PhantomData<T>,PhantomData<M>)) -> Self::Output {
 		Default::default()
 	}
 	
@@ -43,7 +43,7 @@ impl<T,M> Func<PhantomData<(T,M)>> for MapStatToChangeTypeZ
 {
 	type Output=PhantomData<T::ChangeType>;
 	
-	fn call(i: PhantomData<(T,M)>) -> Self::Output {
+	fn call(_i: PhantomData<(T,M)>) -> Self::Output {
 		Default::default()
 	}
 	
