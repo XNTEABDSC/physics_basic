@@ -157,14 +157,14 @@ impl<Num: RealField, const DIM: usize> StatToChangeType<RotationToRotationDelta>
 	type ChangeType=RotationDelta<Num,DIM>;
 }
 
-impl<Num: RealField, const DIM: usize> AddAssign<AngularVel<Num, DIM>> for Rotation<Num, DIM>
-where
-    Const<DIM>: DimMin<Const<DIM>, Output = Const<DIM>>,
-{
-    fn add_assign(&mut self, rhs: AngularVel<Num, DIM>) {
-        *self *= rhs.0.exp();
-    }
-}
+// impl<Num: RealField, const DIM: usize> AddAssign<AngularVel<Num, DIM>> for Rotation<Num, DIM>
+// where
+//     Const<DIM>: DimMin<Const<DIM>, Output = Const<DIM>>,
+// {
+//     fn add_assign(&mut self, rhs: AngularVel<Num, DIM>) {
+//         *self *= rhs.0.exp();
+//     }
+// }
 
 impl<Num: RealField, const DIM: usize> Default for RotationDelta<Num, DIM> {
     fn default() -> Self {
@@ -632,8 +632,36 @@ mod tests {
 	
 
     type T = f64;
+    const D2: usize = 2;
     const D3: usize = 3;
     const D4: usize = 4;
+
+    #[test]
+    fn test_sphere_2d() {
+        let mass = 1.0;
+        let radius = 1.0;
+        let inertia = sphere_inertia::<T, D2>(mass, radius);
+		// println!("{inertia:?}");
+		
+		// 角速度：绕垂直轴旋转，ω = 1
+        let mut omega_mat = SMatrix::<T, D2, D2>::zeros();
+        omega_mat[(0, 1)] = -1.0; // ω_{12} = -ω (so_to_vec 取上三角)
+        omega_mat[(1, 0)] = 1.0;
+        let angular_vel = AngularVel(omega_mat);
+
+		let hlist_pat![angular_momentum]=angular_momentum_from_omega(hlist![&inertia,&angular_vel]);
+
+		let hlist_pat![angular_vel_s]=angular_velocity_from_momentum(hlist![inertia,&angular_momentum]).unwrap();
+
+		// println!("{angular_vel_s:?}");
+		assert_relative_eq!(angular_vel_s.0,angular_vel.0);
+
+		let dt=1.0/8.0;
+
+		let rot=angular_vel_to_rotation(&angular_vel_s, dt);
+
+		println!("{rot:?}");
+    }
 
     #[test]
     fn test_sphere_3d() {
@@ -659,6 +687,7 @@ mod tests {
         for i in 0..3 {
             assert_relative_eq!(inertia.0[(i, i)], expected, epsilon = 1e-12);
         }
+
     }
 
     #[test]
