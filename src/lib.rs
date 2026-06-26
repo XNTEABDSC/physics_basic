@@ -6,3 +6,4 @@ pub mod stats;
 pub mod body;
 pub mod rotation;
 pub mod stat_to_change_type;
+pub mod collide;

@@ -7,10 +7,12 @@ use nalgebra::allocator::Allocator;
 use nalgebra::{Const, DefaultAllocator, DimMin, DimName, RealField};
 use num_traits::Zero;
 use wacky_bag::utils::d_sphere_volume::d_sphere_volume_by_radius_pow;
-use wacky_bag::utils::h_list_helpers::{HToMut, HToRef, SetMut, Sum};
+use wacky_bag_hlist::h_extend_by_fn::h_extend_by_fn_ref;
+// use wacky_bag_hlist::h_extend_by_fn::h_extend_by_fn_ref;
+use wacky_bag_hlist::h_list_helpers::{HToMut, HToRef, SetMut, Sum};
 
 use crate::stats::{Kinetic, Mass, Momentum, Pos, TimePass, Vel, Volume, mass_vel_2_kinetic};
-use crate::rotation::{AngularInertia, AngularKinetic, AngularMomentum, AngularVel, DimNameToSoDimName, DimNameToSoDimNameType, Rotation, angular_kinetic_from_inertia_agv, angular_velocity_from_momentum};
+use crate::rotation::{AngularInertia, AngularKinetic, AngularMomentum, AngularVel, DimNameToSoDimName, DimNameToSoDimNameType, Rotation, RotationMatrix, angular_kinetic_from_inertia_agv, angular_momentum_from_omega, angular_velocity_from_momentum};
 
 
 #[derive(Default, Clone, Copy, Debug)]
@@ -91,6 +93,7 @@ pub type PhyBodyFull<Num,const DIM:usize>=HList!(
 	AngularVel<Num,DIM>,
 	AngularKinetic<Num>,
 	Rotation<Num,DIM>,	
+	RotationMatrix<Num,DIM>
 );
 
 
@@ -115,6 +118,21 @@ where
 	hlist![vel,kinetic]
 }
 
+pub fn calculate_rotation_matrix<Num:RealField,const DIM:usize>(hlist_pat![rotation]:HToRef<HList!(Rotation<Num,DIM>)>)
+->HList!(RotationMatrix<Num,DIM>)
+where
+	Const<DIM>: DimMin<Const<DIM>, Output = Const<DIM>>,
+{
+	hlist![RotationMatrix::from_so(rotation)]
+}
+/// trasfer vel change to momentum
+pub fn collect_position_state_det_pos_momentum_change_vel<Num:RealField+Copy,const DIM:usize>(
+	hlist_pat![mass] : HToRef<HList!(Mass<Num>)>,
+	hlist_pat![vel] : HList!(Vel<Num,DIM>))
+	->HList!(Momentum<Num,DIM>)
+{
+	hlist![Momentum(vel.0*mass.0)]
+}
 
 pub type CalculateAngularStateInput<Num,const DIM:usize>=HList!(AngularInertia<Num,DIM>,AngularMomentum<Num,DIM>);
 
@@ -135,6 +153,22 @@ where
 	hlist![agv,ag_kinetic]
 }
 
+/// trasfer agv change to agm
+pub fn collect_angular_state_det_agi_agm_change_agv<Num,const DIM:usize>(
+	hlist_pat![agi]:HToRef<HList!(AngularInertia<Num,DIM>)>,
+	hlist_pat![agv]:HList!(AngularVel<Num,DIM>),
+)->HList!(AngularMomentum<Num,DIM>)
+where
+	Num:RealField+Copy,
+	Const<DIM>: DimNameToSoDimName + DimName,
+	DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>+Allocator<DimNameToSoDimNameType<DIM>>,
+    DimNameToSoDimNameType<DIM>:
+        DimMin<DimNameToSoDimNameType<DIM>, Output = DimNameToSoDimNameType<DIM>>,
+
+{
+	angular_momentum_from_omega(hlist![agi,&agv])
+}
+
 pub type CalculateBodyStateInput<Num,const DIM:usize>=Sum<CalculatePositionStateInput<Num,DIM>,CalculateAngularStateInput<Num,DIM>>;
 
 pub type CalculateBodyStateOutput<Num,const DIM:usize>=Sum<CalculatePositionStateOutput<Num,DIM>,CalculateAngularStateOutput<Num,DIM>>;
@@ -151,12 +185,13 @@ where
 {
 	let (a,b)=values.sculpt();
 	calculate_position_state(a)+calculate_angular_state(b)
+	// h_extend_by_fn_ref(, calculate_rotation_matrix)
 }
 
 pub fn calculate_body_state_full<Num,const DIM:usize>(s:PhyBodyBasic<Num,DIM>)->PhyBodyFull<Num,DIM>
 where
 	Num:RealField+Copy,
-	Const<DIM>: DimNameToSoDimName + DimName,
+	Const<DIM>: DimNameToSoDimName + DimName + DimMin<Const<DIM>, Output = Const<DIM>>,
 	DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>+Allocator<DimNameToSoDimNameType<DIM>>,
     DimNameToSoDimNameType<DIM>:
         DimMin<DimNameToSoDimNameType<DIM>, Output = DimNameToSoDimNameType<DIM>>,
@@ -164,7 +199,14 @@ where
 	//hlist_pat![time,mass,pos,momentum,agi,agm,rot]
 
 	let n=calculate_body_state(s.to_ref().sculpt().0);
+	let s=s+n;
+	// let s=h_extend_by_fn_ref(s, calculate_body_state);
+	let n=calculate_rotation_matrix(s.to_ref().sculpt().0);
 	(s+n).sculpt().0
+	// let a=;
+	// let a=h_extend_by_fn_ref(s, calculate_body_state);
+	// let a=h_extend_by_fn_ref(a, calculate_rotation_matrix);
+	// a.sculpt().0
 }
 
 pub fn calculate_body_state_inplace<Num,const DIM:usize>(
@@ -192,7 +234,8 @@ pub fn calculate_body_state_full_inplace_m<Num,const DIM:usize>(hlist_pat![
 		agm,
 		agv,
 		agk,
-		_rot]:
+		_rot,
+		_rot_mat]:
 	HToMut<PhyBodyFull<Num,DIM>>)
 where
 	Num:RealField+Copy,
@@ -216,10 +259,10 @@ where
 #[cfg(test)]
 mod tests{
 	use super::*;
-    use frunk::{HList, Poly, hlist::HZippable};
-    use wacky_bag::utils::{h_list_helpers::{HMapP, MapToPhantom}};
+    use frunk::hlist::HZippable;
+    use wacky_bag_hlist::{h_list_helpers::{HMapP, MapToPhantom}};
 
-    use crate::{body::PhyBodyBasicStat, rotation::RotationToRotationDelta, stat_to_change_type::{MapStatToChangeTypeZ, StatToChangeTypeAdd}, stats::{Mass, Pos}};
+    use crate::{body::PhyBodyBasicStat, stat_to_change_type::MapStatToChangeTypeZ};
 
 	type Num=f32;
 	const DIM:usize=3;
@@ -233,7 +276,7 @@ mod tests{
 		// 	>>::Zipped,MapStatToChangeTypeZ
 		// >=Default::default();
 
-		let dwa2:HMapP<
+		let _dwa2:HMapP<
 			<HMapP<
 				PhyBodyBasicStat<Num,DIM>
 				// HList!(Mass<Num>,Pos<Num,DIM>,Momentum<Num,DIM>,Energy<Num>,)

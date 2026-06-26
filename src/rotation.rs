@@ -44,6 +44,27 @@ where
 
 pub type DimNameToSoDimNameType<const DIM: usize> = <Const<DIM> as DimNameToSoDimName>::SoDimName;
 
+/// so(N) matrix about rotation
+#[derive(Clone, Copy, Debug, Add, AddAssign, Sub, SubAssign, Neg)]
+pub struct Rotation<Num: RealField, const DIM: usize>(pub SMatrix<Num, DIM, DIM>);
+
+impl<Num: RealField, const DIM: usize> Default for Rotation<Num, DIM> {
+    fn default() -> Self {
+        Self(SMatrix::<Num, DIM, DIM>::zeros())
+    }
+}
+
+impl<Num: RealField, const DIM: usize> Zero for Rotation<Num, DIM> {
+	
+	fn zero() -> Self {
+		Self(SMatrix::<Num, DIM, DIM>::zeros())
+	}
+	
+	fn is_zero(&self) -> bool {
+		self.0.is_zero()
+	}
+}
+/// so(N) matrix about angular velocity (omega)
 #[derive(Clone, Copy, Debug, Add, AddAssign, Sub, SubAssign, Neg)]
 pub struct AngularVel<Num: RealField, const DIM: usize>(pub SMatrix<Num, DIM, DIM>);
 
@@ -83,14 +104,23 @@ impl<Num: RealField, const DIM: usize> Zero for AngularMomentum<Num, DIM> {
 		self.0.is_zero()
 	}
 }
-
+/// rotation matrix
 #[derive(Clone, Copy, Debug, Mul, MulAssign)]
-pub struct Rotation<Num: RealField, const DIM: usize>(pub SMatrix<Num, DIM, DIM>);
+pub struct RotationMatrix<Num: RealField, const DIM: usize>(pub SMatrix<Num, DIM, DIM>);
 
-impl<Num: RealField, const DIM: usize> Default for Rotation<Num, DIM> {
+impl<Num: RealField, const DIM: usize> Default for RotationMatrix<Num, DIM> {
     fn default() -> Self {
         Self(SMatrix::<Num, DIM, DIM>::identity())
     }
+}
+
+impl<Num: RealField, const DIM: usize> RotationMatrix<Num,DIM> {
+	pub fn from_so(rotation:&Rotation<Num,DIM>)->Self
+	where
+    	Const<DIM>: DimMin<Const<DIM>, Output = Const<DIM>>,
+	{
+		Self(rotation.0.exp())
+	}
 }
 
 // pub trait AllocatorForSo<const DIM:usize> = Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>,Buffer :Send+Sync>;
@@ -139,23 +169,22 @@ where
 }
 
 
-#[derive(Clone, Copy, Debug, Add, AddAssign, Sub, SubAssign, Neg)]
-pub struct RotationDelta<Num: RealField, const DIM: usize>(pub SMatrix<Num, DIM, DIM>);
 
-impl<Num: RealField, const DIM: usize> AddAssign<RotationDelta<Num, DIM>> for Rotation<Num, DIM>
-where
-    Const<DIM>: DimMin<Const<DIM>, Output = Const<DIM>>,
-{
-    fn add_assign(&mut self, rhs: RotationDelta<Num, DIM>) {
-        *self *= rhs.0.exp();
-    }
-}
+// impl<Num: RealField, const DIM: usize> AddAssign<RotationSO<Num, DIM>> for RotationMatrix<Num, DIM>
+// where
+//     Const<DIM>: DimMin<Const<DIM>, Output = Const<DIM>>,
+// {
+//     fn add_assign(&mut self, rhs: RotationSO<Num, DIM>) {
+//         *self *= rhs.0.exp();
+//     }
+// }
 
-pub struct RotationToRotationDelta;
 
-impl<Num: RealField, const DIM: usize> StatToChangeType<RotationToRotationDelta> for Rotation<Num,DIM> {
-	type ChangeType=RotationDelta<Num,DIM>;
-}
+// pub struct RotationToRotationDelta;
+
+// impl<Num: RealField, const DIM: usize> StatToChangeType<RotationToRotationDelta> for RotationMatrix<Num,DIM> {
+// 	type ChangeType=RotationSO<Num,DIM>;
+// }
 
 // impl<Num: RealField, const DIM: usize> AddAssign<AngularVel<Num, DIM>> for Rotation<Num, DIM>
 // where
@@ -165,24 +194,6 @@ impl<Num: RealField, const DIM: usize> StatToChangeType<RotationToRotationDelta>
 //         *self *= rhs.0.exp();
 //     }
 // }
-
-impl<Num: RealField, const DIM: usize> Default for RotationDelta<Num, DIM> {
-    fn default() -> Self {
-        Self(SMatrix::<Num, DIM, DIM>::zeros())
-    }
-}
-
-impl<Num: RealField, const DIM: usize> Zero for RotationDelta<Num, DIM> {
-	
-	fn zero() -> Self {
-		Self(SMatrix::<Num, DIM, DIM>::zeros())
-	}
-	
-	fn is_zero(&self) -> bool {
-		self.0.is_zero()
-	}
-}
-
 
 pub fn angular_vel_to_rotation<Num: RealField, const DIM: usize>(
     agv: &AngularVel<Num, DIM>,
@@ -194,7 +205,7 @@ where
     (&agv.0 * dt).exp()
 }
 
-pub fn so_to_vec<T: RealField + Copy, const DIM: usize>(
+pub fn so_mat_to_vec<T: RealField + Copy, const DIM: usize>(
     omega: &SMatrix<T, DIM, DIM>,
 ) -> OVector<T, DimNameToSoDimNameType<DIM>>
 where
@@ -212,8 +223,9 @@ where
     }
     vec
 }
+
 /// 将so(n)基下的向量转换回反对称矩阵
-pub fn vec_to_so<T: RealField + Copy, const DIM: usize>(
+pub fn so_vec_to_mat<T: RealField + Copy, const DIM: usize>(
     vec: &OVector<T, DimNameToSoDimNameType<DIM>>,
 ) -> SMatrix<T, DIM, DIM>
 where
@@ -317,15 +329,15 @@ where
     DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>>
         + Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>,
 {
-    let omega_vec = so_to_vec(&omega.0);
+    let omega_vec = so_mat_to_vec(&omega.0);
     let total_inertia = &total_inertia.0;
     let l_vec = total_inertia * omega_vec;
-    hlist![AngularMomentum(vec_to_so(&l_vec))]
+    hlist![AngularMomentum(so_vec_to_mat(&l_vec))]
 }
 
 /// 根据总角动量计算角速度（反对称矩阵形式）
 /// 返回 `None` 若转动惯量矩阵奇异（刚体可绕某些轴自由旋转）
-pub fn angular_velocity_from_momentum_<T: RealField + Copy, D2>(
+pub fn angular_velocity_from_momentum_raw<T: RealField + Copy, D2>(
     angular_momentum_so: &OVector<T, D2>,
     total_inertia: OMatrix<T, D2, D2>,
 ) -> Option<OVector<T, D2>>
@@ -360,8 +372,8 @@ where
         DimMin<DimNameToSoDimNameType<DIM>, Output = DimNameToSoDimNameType<DIM>>,
 {
 	
-    angular_velocity_from_momentum_(&so_to_vec(&angular_momentum.0), total_inertia.0)
-        .map(|v| hlist![AngularVel(vec_to_so(&v))])
+    angular_velocity_from_momentum_raw(&so_mat_to_vec(&angular_momentum.0), total_inertia.0)
+        .map(|v| hlist![AngularVel(so_vec_to_mat(&v))])
 }
 
 /// 计算 D 维均匀超球体（半径为 r）的转动惯量。
@@ -435,7 +447,7 @@ where
     Const<DIM>: DimNameToSoDimName + DimName,
     DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>> + Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>,
 {
-    let omega_vec = so_to_vec(&angular_vel.0);
+    let omega_vec = so_mat_to_vec(&angular_vel.0);
     let i_omega = &inertia.0 * omega_vec.clone();
     let half = Num::p2();
     hlist![AngularKinetic( half * omega_vec.dot(&i_omega) )]

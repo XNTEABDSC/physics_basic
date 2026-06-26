@@ -2,7 +2,7 @@ use std::{marker::PhantomData, ops::AddAssign};
 
 use frunk::Func;
 use num_traits::Zero;
-use wacky_bag::utils::{h_list_helpers::{HTypeMapP, HZip}, type_fn::TypeFunc};
+use wacky_bag_hlist::{h_list_helpers::{HTypeMapP, HZip}, type_fn::TypeFunc};
 
 pub trait StatToChangeType<Marker>{
 	type ChangeType

@@ -410,6 +410,7 @@ dependencies = [
  "simba",
  "typenum",
  "wacky_bag",
+ "wacky_bag_hlist",
 ]
 
 [[package]]
@@ -579,6 +580,13 @@ dependencies = [
  "num-traits",
  "simba",
  "wacky_bag_macro",
+]
+
+[[package]]
+name = "wacky_bag_hlist"
+version = "0.1.0"
+dependencies = [
+ "frunk",
 ]
 
 [[package]]
