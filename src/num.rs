@@ -2,19 +2,19 @@
 
 use nalgebra::{Const, DefaultAllocator, DimMin, DimName, ToTypenum, allocator::Allocator};
 
-use crate::rotation::DimNameToSoDimName;
+use crate::rotation::DimToSoDim;
 
 
 pub trait DimNameTrait:
-	where Self: DimName + DimMin<Self,Output = Self> + DimNameToSoDimName + ToTypenum,
-    DefaultAllocator: Allocator< <Self as DimNameToSoDimName>::SoDimName > + Allocator<<Self as DimNameToSoDimName>::SoDimName,<Self as DimNameToSoDimName>::SoDimName>,
+	where Self: DimName + DimMin<Self,Output = Self> + DimToSoDim + ToTypenum,
+    DefaultAllocator: Allocator< <Self as DimToSoDim>::SoDim > + Allocator<<Self as DimToSoDim>::SoDim,<Self as DimToSoDim>::SoDim>,
 {
 
 }
 
 impl<const D:usize> DimNameTrait for Const<D> 
-	where Const<D>:ToTypenum+DimNameToSoDimName+DimMin<Self,Output = Self>,
-	DefaultAllocator: Allocator< <Self as DimNameToSoDimName>::SoDimName > + Allocator<<Self as DimNameToSoDimName>::SoDimName,<Self as DimNameToSoDimName>::SoDimName>,
+	where Const<D>:ToTypenum+DimToSoDim+DimMin<Self,Output = Self>,
+	DefaultAllocator: Allocator< <Self as DimToSoDim>::SoDim > + Allocator<<Self as DimToSoDim>::SoDim,<Self as DimToSoDim>::SoDim>,
 {
 	
 }

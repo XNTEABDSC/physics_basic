@@ -9,10 +9,11 @@ use num_traits::Zero;
 use wacky_bag::utils::d_sphere_volume::d_sphere_volume_by_radius_pow;
 use wacky_bag_hlist::h_extend_by_fn::h_extend_by_fn_ref;
 // use wacky_bag_hlist::h_extend_by_fn::h_extend_by_fn_ref;
-use wacky_bag_hlist::h_list_helpers::{HToMut, HToRef, SetMut, Sum};
+use wacky_bag_hlist::h_list_helpers::{HToMut, HToRef, MapMutToRef, SetMut, Sum};
+use wacky_bag_hlist::output_map::HMappableFrom;
 
 use crate::stats::{Kinetic, Mass, Momentum, Pos, TimePass, Vel, Volume, mass_vel_2_kinetic};
-use crate::rotation::{AngularInertia, AngularKinetic, AngularMomentum, AngularVel, DimNameToSoDimName, DimNameToSoDimNameType, Rotation, RotationMatrix, angular_kinetic_from_inertia_agv, angular_momentum_from_omega, angular_velocity_from_momentum};
+use crate::rotation::{AllocatorDimVMSoDimVM, AngularInertia, AngularKinetic, AngularMomentum, AngularVel, ConstDimToSoDimT, DimSquare, DimSquareSo, DimToSoDim, Rotation, RotationMatrix, angular_kinetic_from_inertia_agv, angular_momentum_from_omega, angular_velocity_from_momentum};
 
 
 #[derive(Default, Clone, Copy, Debug)]
@@ -118,10 +119,11 @@ where
 	hlist![vel,kinetic]
 }
 
-pub fn calculate_rotation_matrix<Num:RealField,const DIM:usize>(hlist_pat![rotation]:HToRef<HList!(Rotation<Num,DIM>)>)
+pub fn calculate_rotation_matrix<Num:RealField+Copy,const DIM:usize>(hlist_pat![rotation]:HToRef<HList!(Rotation<Num,DIM>)>)
 ->HList!(RotationMatrix<Num,DIM>)
 where
-	Const<DIM>: DimMin<Const<DIM>, Output = Const<DIM>>,
+	Const<DIM>: DimSquare+DimToSoDim,
+	DefaultAllocator:Allocator<ConstDimToSoDimT<DIM>>,
 {
 	hlist![RotationMatrix::from_so(rotation)]
 }
@@ -142,10 +144,9 @@ pub fn calculate_angular_state<Num,const DIM:usize>(hlist_pat![agi,agm] : HToRef
 ->CalculateAngularStateOutput<Num,DIM>
 where
 	Num:RealField+Copy,
-	Const<DIM>: DimNameToSoDimName + DimName,
-	DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>+Allocator<DimNameToSoDimNameType<DIM>>,
-    DimNameToSoDimNameType<DIM>:
-        DimMin<DimNameToSoDimNameType<DIM>, Output = DimNameToSoDimNameType<DIM>>,
+	Const<DIM>: DimSquareSo,
+    ConstDimToSoDimT<DIM>: DimSquare,
+    DefaultAllocator: AllocatorDimVMSoDimVM<Const<DIM>>,
 
 {
 	let hlist_pat![agv]=angular_velocity_from_momentum(hlist![agi.clone(),&agm]).unwrap_or_else(||hlist![Zero::zero()]);
@@ -160,10 +161,10 @@ pub fn collect_angular_state_det_agi_agm_change_agv<Num,const DIM:usize>(
 )->HList!(AngularMomentum<Num,DIM>)
 where
 	Num:RealField+Copy,
-	Const<DIM>: DimNameToSoDimName + DimName,
-	DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>+Allocator<DimNameToSoDimNameType<DIM>>,
-    DimNameToSoDimNameType<DIM>:
-        DimMin<DimNameToSoDimNameType<DIM>, Output = DimNameToSoDimNameType<DIM>>,
+	Const<DIM>: DimToSoDim + DimName,
+	DefaultAllocator: Allocator<ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>>+Allocator<ConstDimToSoDimT<DIM>>,
+    ConstDimToSoDimT<DIM>:
+        DimMin<ConstDimToSoDimT<DIM>, Output = ConstDimToSoDimT<DIM>>,
 
 {
 	angular_momentum_from_omega(hlist![agi,&agv])
@@ -177,10 +178,9 @@ pub fn calculate_body_state<Num,const DIM:usize>(values : HToRef<CalculateBodySt
 ->CalculateBodyStateOutput<Num,DIM>
 where
 	Num:RealField+Copy,
-	Const<DIM>: DimNameToSoDimName + DimName,
-	DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>+Allocator<DimNameToSoDimNameType<DIM>>,
-    DimNameToSoDimNameType<DIM>:
-        DimMin<DimNameToSoDimNameType<DIM>, Output = DimNameToSoDimNameType<DIM>>,
+	Const<DIM>: DimSquareSo,
+    ConstDimToSoDimT<DIM>: DimSquare,
+    DefaultAllocator: AllocatorDimVMSoDimVM<Const<DIM>>,
 
 {
 	let (a,b)=values.sculpt();
@@ -191,10 +191,9 @@ where
 pub fn calculate_body_state_full<Num,const DIM:usize>(s:PhyBodyBasic<Num,DIM>)->PhyBodyFull<Num,DIM>
 where
 	Num:RealField+Copy,
-	Const<DIM>: DimNameToSoDimName + DimName + DimMin<Const<DIM>, Output = Const<DIM>>,
-	DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>+Allocator<DimNameToSoDimNameType<DIM>>,
-    DimNameToSoDimNameType<DIM>:
-        DimMin<DimNameToSoDimNameType<DIM>, Output = DimNameToSoDimNameType<DIM>>,
+	Const<DIM>: DimSquareSo,
+    ConstDimToSoDimT<DIM>: DimSquare,
+    DefaultAllocator: AllocatorDimVMSoDimVM<Const<DIM>>,
 {
 	//hlist_pat![time,mass,pos,momentum,agi,agm,rot]
 
@@ -211,19 +210,28 @@ where
 
 pub fn calculate_body_state_inplace<Num,const DIM:usize>(
 	values:
-	<HToRef<CalculateBodyStateInput<Num,DIM>> as Add<HToMut<CalculateBodyStateOutput<Num,DIM>>> >::Output)
+	// <HToRef<CalculateBodyStateInput<Num,DIM>> as Add<HToMut<CalculateBodyStateOutput<Num,DIM>>> >::Output
+	Sum<HToRef<CalculateBodyStateInput<Num,DIM>>, HToMut<CalculateBodyStateOutput<Num,DIM>>>
+)
 where
 	Num:RealField+Copy,
-	Const<DIM>: DimNameToSoDimName + DimName,
-	DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>+Allocator<DimNameToSoDimNameType<DIM>>,
-    DimNameToSoDimNameType<DIM>:
-        DimMin<DimNameToSoDimNameType<DIM>, Output = DimNameToSoDimNameType<DIM>>,
+	Const<DIM>: DimSquareSo,
+    ConstDimToSoDimT<DIM>: DimSquare,
+    DefaultAllocator: AllocatorDimVMSoDimVM<Const<DIM>>,
 {
 	let (inputs,outputs):(HToRef<CalculateBodyStateInput<Num,DIM>>,_)=values.sculpt();
 	outputs.zip(calculate_body_state(inputs)).map(Poly(SetMut));
 }
 
-pub fn calculate_body_state_full_inplace_m<Num,const DIM:usize>(hlist_pat![
+pub fn calculate_body_state_full_inplace_m<Num,const DIM:usize>(input:
+	HToMut<PhyBodyFull<Num,DIM>>)
+where
+	Num:RealField+Copy,
+	Const<DIM>: DimSquareSo,
+    ConstDimToSoDimT<DIM>: DimSquare,
+    DefaultAllocator: AllocatorDimVMSoDimVM<Const<DIM>>,
+{
+	let hlist_pat![
 		_time,
 		mass,
 		_pos,
@@ -235,25 +243,10 @@ pub fn calculate_body_state_full_inplace_m<Num,const DIM:usize>(hlist_pat![
 		agv,
 		agk,
 		_rot,
-		_rot_mat]:
-	HToMut<PhyBodyFull<Num,DIM>>)
-where
-	Num:RealField+Copy,
-	Const<DIM>: DimNameToSoDimName + DimName,
-	DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>+Allocator<DimNameToSoDimNameType<DIM>>,
-    DimNameToSoDimNameType<DIM>:
-        DimMin<DimNameToSoDimNameType<DIM>, Output = DimNameToSoDimNameType<DIM>>,
-{
+		_rot_mat]=input;
+
 	calculate_body_state_inplace(hlist![mass,momentum,agi,agm,vel,kinetic,agv,agk]);
 }
-
-
-
-
-
-
-
-
 
 
 #[cfg(test)]

@@ -6,15 +6,15 @@ use crate::{
 use derive_more::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use frunk::{HList, hlist, hlist_pat};
 use nalgebra::{
-    Const, DefaultAllocator, DimMin, DimName, LU, OMatrix, OVector, RealField, SMatrix, SVector,
-    ToConst, ToTypenum, allocator::Allocator,
+    Const, DefaultAllocator, Dim, DimMin, DimName, LU, OMatrix, OVector, RealField, SMatrix, SVector, ToConst, ToTypenum, allocator::Allocator,
 };
 use num_traits::Zero;
 use typenum::{U0, U1, U2};
 use wacky_bag::utils::num_extend::NumExtends;
 // use simba::scalar::FixedI32F32;
 
-pub trait DimNameToSoDimName
+/// N -> N*(N-1)/2
+pub trait DimToSoDim:Dim
 where
     Self: ToTypenum<
         Typenum: Sub<U1>
@@ -24,60 +24,50 @@ where
         >,
     >,
 {
-    type SoDimName: DimName;
+    type SoDim:Dim+DimName;
     const SO_DIM: usize;
 }
 
 // type ToSoSizeTExp<N>= <Prod<N,Sum<N,N1>> as PartialDiv<P2>>::Output;
 
-impl<const DIM: usize, TNum, SubTNum1, TNum2> DimNameToSoDimName for Const<DIM>
+impl<const DIM: usize, TNum, SubTNum1, TNum2> DimToSoDim for Const<DIM>
 where
     Self: ToTypenum<Typenum = TNum>,
     TNum: Sub<U1, Output = SubTNum1>
         + Mul<SubTNum1, Output: Div<U2, Output = TNum2> + Rem<U2, Output = U0>>,
     TNum2: ToConst,
 {
-    type SoDimName = TNum2::Const;
+    type SoDim = TNum2::Const;
 
     const SO_DIM: usize = TNum2::Const::DIM;
 }
 
-pub type DimNameToSoDimNameType<const DIM: usize> = <Const<DIM> as DimNameToSoDimName>::SoDimName;
+pub type DimToSoDimT<Dim> = <Dim as DimToSoDim>::SoDim;
+pub type ConstDimToSoDimT<const DIM: usize> = <Const<DIM> as DimToSoDim>::SoDim;
 
-/// so(N) matrix about rotation
-#[derive(Clone, Copy, Debug, Add, AddAssign, Sub, SubAssign, Neg)]
-pub struct Rotation<Num: RealField, const DIM: usize>(pub SMatrix<Num, DIM, DIM>);
+/// so(N) vector about rotation
+#[derive(Clone, Debug, Add, AddAssign, Sub, SubAssign, Neg)]
+pub struct Rotation<Num: RealField, const DIM: usize>(pub OVector<Num, ConstDimToSoDimT<DIM>>)
+where Const<DIM>:DimToSoDim,DefaultAllocator:Allocator<ConstDimToSoDimT<DIM>>;
 
-impl<Num: RealField, const DIM: usize> Default for Rotation<Num, DIM> {
-    fn default() -> Self {
-        Self(SMatrix::<Num, DIM, DIM>::zeros())
-    }
+impl<Num: RealField + Copy, const DIM: usize> Copy for Rotation<Num, DIM>
+where Const<DIM>:DimToSoDim,DefaultAllocator:Allocator<ConstDimToSoDimT<DIM>,Buffer<Num>:Copy >
+{
 }
 
-impl<Num: RealField, const DIM: usize> Zero for Rotation<Num, DIM> {
-	
-	fn zero() -> Self {
-		Self(SMatrix::<Num, DIM, DIM>::zeros())
-	}
-	
-	fn is_zero(&self) -> bool {
-		self.0.is_zero()
-	}
-}
-/// so(N) matrix about angular velocity (omega)
-#[derive(Clone, Copy, Debug, Add, AddAssign, Sub, SubAssign, Neg)]
-pub struct AngularVel<Num: RealField, const DIM: usize>(pub SMatrix<Num, DIM, DIM>);
-
-impl<Num: RealField, const DIM: usize> Default for AngularVel<Num, DIM> {
+impl<Num: RealField, const DIM: usize> Default for Rotation<Num, DIM>
+where Const<DIM>:DimToSoDim,DefaultAllocator:Allocator<ConstDimToSoDimT<DIM>>
+{
 	fn default() -> Self {
-		Self(SMatrix::<Num, DIM, DIM>::zeros())
+		Self(OVector::<Num, ConstDimToSoDimT<DIM>>::zeros())
 	}
 }
 
-impl<Num: RealField, const DIM: usize> Zero for AngularVel<Num, DIM> {
+impl<Num: RealField, const DIM: usize> Zero for Rotation<Num, DIM>
+where Const<DIM>:DimToSoDim,DefaultAllocator:Allocator<ConstDimToSoDimT<DIM>> {
 	
 	fn zero() -> Self {
-		Self(SMatrix::<Num, DIM, DIM>::zeros())
+		Self(OVector::<Num, ConstDimToSoDimT<DIM>>::zeros())
 	}
 	
 	fn is_zero(&self) -> bool {
@@ -85,19 +75,57 @@ impl<Num: RealField, const DIM: usize> Zero for AngularVel<Num, DIM> {
 	}
 }
 
-#[derive(Clone, Copy, Debug, Add, AddAssign, Sub, SubAssign, Neg)]
-pub struct AngularMomentum<Num: RealField, const DIM: usize>(pub SMatrix<Num, DIM, DIM>);
+#[derive(Clone, Debug, Add, AddAssign, Sub, SubAssign, Neg)]
+pub struct AngularVel<Num: RealField, const DIM: usize>(pub OVector<Num, ConstDimToSoDimT<DIM>>)
+where Const<DIM>:DimToSoDim,DefaultAllocator:Allocator<ConstDimToSoDimT<DIM>>;
 
-impl<Num: RealField, const DIM: usize> Default for AngularMomentum<Num, DIM> {
+impl<Num: RealField + Copy, const DIM: usize> Copy for AngularVel<Num, DIM>
+where Const<DIM>:DimToSoDim,DefaultAllocator:Allocator<ConstDimToSoDimT<DIM>,Buffer<Num>:Copy >
+{
+}
+
+impl<Num: RealField, const DIM: usize> Default for AngularVel<Num, DIM>
+where Const<DIM>:DimToSoDim,DefaultAllocator:Allocator<ConstDimToSoDimT<DIM>>
+{
 	fn default() -> Self {
-		Self(SMatrix::<Num, DIM, DIM>::zeros())
+		Self(OVector::<Num, ConstDimToSoDimT<DIM>>::zeros())
 	}
 }
 
-impl<Num: RealField, const DIM: usize> Zero for AngularMomentum<Num, DIM> {
+impl<Num: RealField, const DIM: usize> Zero for AngularVel<Num, DIM>
+where Const<DIM>:DimToSoDim,DefaultAllocator:Allocator<ConstDimToSoDimT<DIM>> {
 	
 	fn zero() -> Self {
-		Self(SMatrix::<Num, DIM, DIM>::zeros())
+		Self(OVector::<Num, ConstDimToSoDimT<DIM>>::zeros())
+	}
+	
+	fn is_zero(&self) -> bool {
+		self.0.is_zero()
+	}
+}
+
+#[derive(Clone, Debug, Add, AddAssign, Sub, SubAssign, Neg)]
+pub struct AngularMomentum<Num: RealField, const DIM: usize>(pub OVector<Num, ConstDimToSoDimT<DIM>>)
+where Const<DIM>:DimToSoDim,DefaultAllocator:Allocator<ConstDimToSoDimT<DIM>>;
+
+impl<Num: RealField + Copy, const DIM: usize> Copy for AngularMomentum<Num, DIM>
+where Const<DIM>:DimToSoDim,DefaultAllocator:Allocator<ConstDimToSoDimT<DIM>,Buffer<Num>:Copy >
+{
+}
+
+impl<Num: RealField, const DIM: usize> Default for AngularMomentum<Num, DIM>
+where Const<DIM>:DimToSoDim,DefaultAllocator:Allocator<ConstDimToSoDimT<DIM>>
+{
+	fn default() -> Self {
+		Self(OVector::<Num, ConstDimToSoDimT<DIM>>::zeros())
+	}
+}
+
+impl<Num: RealField, const DIM: usize> Zero for AngularMomentum<Num, DIM>
+where Const<DIM>:DimToSoDim,DefaultAllocator:Allocator<ConstDimToSoDimT<DIM>> {
+	
+	fn zero() -> Self {
+		Self(OVector::<Num, ConstDimToSoDimT<DIM>>::zeros())
 	}
 	
 	fn is_zero(&self) -> bool {
@@ -114,12 +142,13 @@ impl<Num: RealField, const DIM: usize> Default for RotationMatrix<Num, DIM> {
     }
 }
 
-impl<Num: RealField, const DIM: usize> RotationMatrix<Num,DIM> {
+impl<Num: RealField+Copy, const DIM: usize> RotationMatrix<Num,DIM> {
 	pub fn from_so(rotation:&Rotation<Num,DIM>)->Self
 	where
-    	Const<DIM>: DimMin<Const<DIM>, Output = Const<DIM>>,
+    	Const<DIM>:DimToSoDim+DimSquare,
+		DefaultAllocator:Allocator<ConstDimToSoDimT<DIM>>,
 	{
-		Self(rotation.0.exp())
+		Self(so_vec_to_mat(&rotation.0).exp())
 	}
 }
 
@@ -127,29 +156,29 @@ impl<Num: RealField, const DIM: usize> RotationMatrix<Num,DIM> {
 
 #[derive(Clone, Debug, Add, AddAssign, Sub, SubAssign, Neg)]
 pub struct AngularInertia<Num: RealField+Copy, const DIM: usize>(
-    pub OMatrix<Num, DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>,
+    pub OMatrix<Num, ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>>,
 )
 where
-    Const<DIM>: DimNameToSoDimName,
-    DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>;
+    Const<DIM>: DimToSoDim,
+    DefaultAllocator: Allocator<ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>>;
 
 impl<Num: RealField + Copy, const DIM: usize> Default for AngularInertia<Num, DIM>
 where
-	Const<DIM>: DimNameToSoDimName,
-	DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>
+	Const<DIM>: DimToSoDim,
+	DefaultAllocator: Allocator<ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>>
 {
 	fn default() -> Self {
-		Self(OMatrix::<Num, DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>::zeros())
+		Self(OMatrix::<Num, ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>>::zeros())
 	}
 }
 
 impl<Num: RealField + Copy, const DIM: usize> Zero for AngularInertia<Num, DIM>
 where
-	Const<DIM>: DimNameToSoDimName,
-	DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>
+	Const<DIM>: DimToSoDim,
+	DefaultAllocator: Allocator<ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>>
 {
 	fn zero() -> Self {
-		Self(OMatrix::<Num, DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>::zeros())
+		Self(OMatrix::<Num, ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>>::zeros())
 	}
 
 	fn is_zero(&self) -> bool {
@@ -162,8 +191,8 @@ where
 
 impl<Num: RealField+Copy, const DIM: usize> Copy for AngularInertia<Num,DIM>
 where
-    Const<DIM>: DimNameToSoDimName,
-    DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>,Buffer<Num> : Copy>
+    Const<DIM>: DimToSoDim,
+    DefaultAllocator: Allocator<ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>,Buffer<Num> : Copy>
 {
 	
 }
@@ -195,25 +224,26 @@ where
 //     }
 // }
 
-pub fn angular_vel_to_rotation<Num: RealField, const DIM: usize>(
+pub fn angular_vel_to_rotation_matrix<Num: RealField + Copy, const DIM: usize>(
     agv: &AngularVel<Num, DIM>,
     dt: Num,
 ) -> SMatrix<Num, DIM, DIM>
 where
-    Const<DIM>: DimMin<Const<DIM>, Output = Const<DIM>>,
+    Const<DIM>: DimToSoDim+DimSquare,
+	DefaultAllocator:Allocator<ConstDimToSoDimT<DIM>>
 {
-    (&agv.0 * dt).exp()
+    (so_vec_to_mat(&agv.0) * dt).exp()
 }
 
 pub fn so_mat_to_vec<T: RealField + Copy, const DIM: usize>(
     omega: &SMatrix<T, DIM, DIM>,
-) -> OVector<T, DimNameToSoDimNameType<DIM>>
+) -> OVector<T, ConstDimToSoDimT<DIM>>
 where
-    Const<DIM>: DimNameToSoDimName,
-    DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>>,
+    Const<DIM>: DimToSoDim,
+    DefaultAllocator: Allocator<ConstDimToSoDimT<DIM>>,
 {
     // const N: usize = D * (D - 1) / 2;
-    let mut vec = OVector::<T, DimNameToSoDimNameType<DIM>>::zeros();
+    let mut vec = OVector::<T, ConstDimToSoDimT<DIM>>::zeros();
     let mut idx = 0;
     for i in 0..DIM {
         for j in i + 1..DIM {
@@ -226,11 +256,11 @@ where
 
 /// 将so(n)基下的向量转换回反对称矩阵
 pub fn so_vec_to_mat<T: RealField + Copy, const DIM: usize>(
-    vec: &OVector<T, DimNameToSoDimNameType<DIM>>,
+    vec: &OVector<T, ConstDimToSoDimT<DIM>>,
 ) -> SMatrix<T, DIM, DIM>
 where
-    Const<DIM>: DimNameToSoDimName,
-    DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>>
+    Const<DIM>: DimToSoDim,
+    DefaultAllocator: Allocator<ConstDimToSoDimT<DIM>>
         + Allocator<Const<DIM>, Const<DIM>, Buffer<T> = nalgebra::ArrayStorage<T, DIM, DIM>>,
 {
     let mut mat = SMatrix::<T, DIM, DIM>::zeros();
@@ -251,13 +281,13 @@ where
 fn orbit_matrix<T: RealField + Copy, const DIM: usize>(
     mass: T,
     r: &SVector<T, DIM>,
-) -> OMatrix<T, DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>
+) -> OMatrix<T, ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>>
 where
-    Const<DIM>: DimNameToSoDimName + DimName,
-    DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>>
-        + Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>,
+    Const<DIM>: DimToSoDim + DimName,
+    DefaultAllocator: Allocator<ConstDimToSoDimT<DIM>>
+        + Allocator<ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>>,
 {
-    let mut m = OMatrix::<T, DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>::zeros();
+    let mut m = OMatrix::<T, ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>>::zeros();
     let mut out_idx = 0;
     for a in 0..DIM {
         for b in a + 1..DIM {
@@ -300,18 +330,18 @@ pub fn total_inertia_matrix<'a, T: RealField + Copy, const DIM: usize>(
     objects: impl IntoIterator<Item = HList!(&'a Mass<T>, &'a Pos<T, DIM>, &'a AngularInertia<T, DIM>)>,
 ) -> AngularInertia<T, DIM>
 where
-    Const<DIM>: DimNameToSoDimName + DimName,
-    DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>>
-        + Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>,
+    Const<DIM>: DimToSoDim + DimName,
+    DefaultAllocator: Allocator<ConstDimToSoDimT<DIM>>
+        + Allocator<ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>>,
 {
     let res = objects.into_iter().fold(
-        OMatrix::<T, DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>::zeros(),
+        OMatrix::<T, ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>>::zeros(),
         move |acc, hlist_pat![mass, pos, inertia]| {
             // acc + orbit_matrix(mass.0, &pos.0) + inertia.0
             let a = orbit_matrix(mass.0, &pos.0);
             let b = &inertia.0;
             let i = a + b;
-            <OMatrix<T, DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>> as Add<_>>::add(
+            <OMatrix<T, ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>> as Add<_>>::add(
                 acc, &i,
             )
         },
@@ -325,14 +355,14 @@ pub fn angular_momentum_from_omega<T: RealField + Copy, const DIM: usize>(
 ) -> HList!(AngularMomentum<T, DIM>)
 //SMatrix<T, DIM, DIM>
 where
-    Const<DIM>: DimNameToSoDimName + DimName,
-    DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>>
-        + Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>,
+    Const<DIM>: DimToSoDim + DimName,
+    DefaultAllocator: Allocator<ConstDimToSoDimT<DIM>>
+        + Allocator<ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>>,
 {
-    let omega_vec = so_mat_to_vec(&omega.0);
+    let omega_vec = &omega.0;
     let total_inertia = &total_inertia.0;
     let l_vec = total_inertia * omega_vec;
-    hlist![AngularMomentum(so_vec_to_mat(&l_vec))]
+    hlist![AngularMomentum(l_vec)]
 }
 
 /// 根据总角动量计算角速度（反对称矩阵形式）
@@ -365,15 +395,15 @@ pub fn angular_velocity_from_momentum<T: RealField + Copy, const DIM: usize>(
     hlist_pat![total_inertia, angular_momentum]: HList!(AngularInertia<T,DIM>,&AngularMomentum<T, DIM>),
 ) -> Option<HList!(AngularVel<T,DIM>)>
 where
-    Const<DIM>: DimNameToSoDimName + DimName,
-    DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>>
-        + Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>,
-    DimNameToSoDimNameType<DIM>:
-        DimMin<DimNameToSoDimNameType<DIM>, Output = DimNameToSoDimNameType<DIM>>,
+    Const<DIM>: DimToSoDim,
+    DefaultAllocator: Allocator<ConstDimToSoDimT<DIM>>
+        + Allocator<ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>>,
+    ConstDimToSoDimT<DIM>:
+        DimMin<ConstDimToSoDimT<DIM>, Output = ConstDimToSoDimT<DIM>>,
 {
 	
-    angular_velocity_from_momentum_raw(&so_mat_to_vec(&angular_momentum.0), total_inertia.0)
-        .map(|v| hlist![AngularVel(so_vec_to_mat(&v))])
+    angular_velocity_from_momentum_raw(&angular_momentum.0, total_inertia.0)
+        .map(|v| hlist![AngularVel(v)])
 }
 
 /// 计算 D 维均匀超球体（半径为 r）的转动惯量。
@@ -383,16 +413,16 @@ pub fn sphere_inertia<T: RealField + Copy, const DIM: usize>(
     radius: T,
 ) -> AngularInertia<T, DIM>
 where
-    Const<DIM>: DimNameToSoDimName + DimName,
-    DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>> + Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>,
+    Const<DIM>: DimToSoDim,
+    DefaultAllocator: Allocator<ConstDimToSoDimT<DIM>> + Allocator<ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>>,
 {
     let n = T::from_usize(DIM).unwrap();
     let two = T::one() + T::one();
     let factor = two / (n + two);          // 2/(n+2)
     let i0 = mass * radius * radius * factor;
 
-    let n_so = DimNameToSoDimNameType::<DIM>::dim();
-    let mut mat = OMatrix::<T, DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>::zeros();
+    let n_so = ConstDimToSoDimT::<DIM>::dim();
+    let mut mat = OMatrix::<T, ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>>::zeros();
     for i in 0..n_so {
         mat[(i, i)] = i0;
     }
@@ -407,12 +437,12 @@ pub fn cuboid_inertia<T: RealField + Copy, const DIM: usize>(
     side_lengths: &SVector<T, DIM>,
 ) -> AngularInertia<T, DIM>
 where
-    Const<DIM>: DimNameToSoDimName + DimName,
-    DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>> + Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>,
+    Const<DIM>: DimToSoDim,
+    DefaultAllocator: Allocator<ConstDimToSoDimT<DIM>> + Allocator<ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>>,
 {
     let twelve = T::from_usize(12).unwrap();
-    let _n_so = DimNameToSoDimNameType::<DIM>::dim();
-    let mut mat = OMatrix::<T, DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>::zeros();
+    let _n_so = ConstDimToSoDimT::<DIM>::dim();
+    let mut mat = OMatrix::<T, ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>>::zeros();
     let mut idx = 0;
     for i in 0..DIM {
         for j in i + 1..DIM {
@@ -444,10 +474,11 @@ pub fn angular_kinetic_from_inertia_agv<Num: RealField + Copy, const DIM: usize>
 	hlist_pat![inertia, angular_vel]: HList!(&AngularInertia<Num,DIM>,&AngularVel<Num, DIM>),
 ) -> HList!(AngularKinetic<Num>)
 where
-    Const<DIM>: DimNameToSoDimName + DimName,
-    DefaultAllocator: Allocator<DimNameToSoDimNameType<DIM>> + Allocator<DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>,
+	Const<DIM>:DimToSoDim,
+	// ConstDimToSoDimT<DIM>:DimSquare,
+    DefaultAllocator: AllocatorVM<ConstDimToSoDimT<DIM>>,
 {
-    let omega_vec = so_mat_to_vec(&angular_vel.0);
+    let omega_vec = &angular_vel.0;
     let i_omega = &inertia.0 * omega_vec.clone();
     let half = Num::p2();
     hlist![AngularKinetic( half * omega_vec.dot(&i_omega) )]
@@ -463,14 +494,15 @@ mod tests {
     // 辅助函数：创建零惯量（质点）
     fn zero_inertia<T: RealField + Copy, const D: usize>() -> AngularInertia<T, D>
     where
-        Const<D>: DimNameToSoDimName + DimName,
-        DefaultAllocator: Allocator<DimNameToSoDimNameType<D>>
-            + Allocator<DimNameToSoDimNameType<D>, DimNameToSoDimNameType<D>>,
+        Const<D>: DimToSoDim + DimName,
+        DefaultAllocator: Allocator<ConstDimToSoDimT<D>>
+            + Allocator<ConstDimToSoDimT<D>, ConstDimToSoDimT<D>>,
+		// Const<D>:DimSoDimAlloc<T,DefaultAllocator>,DimToSoDimT<Const<D>>:DimSquare
     {
         AngularInertia(OMatrix::<
             T,
-            DimNameToSoDimNameType<D>,
-            DimNameToSoDimNameType<D>,
+            ConstDimToSoDimT<D>,
+            ConstDimToSoDimT<D>,
         >::zeros())
     }
 
@@ -487,6 +519,7 @@ mod tests {
         let mut omega_mat = SMatrix::<T, DIM, DIM>::zeros();
         omega_mat[(0, 1)] = -1.0; // ω_{12} = -ω (so_to_vec 取上三角)
         omega_mat[(1, 0)] = 1.0;
+		let omega_mat=so_mat_to_vec(&omega_mat);
         let angular_vel = AngularVel(omega_mat);
 
         // 计算总惯量矩阵
@@ -523,6 +556,7 @@ mod tests {
         let mut omega_mat = SMatrix::<T, DIM, DIM>::zeros();
         omega_mat[(0, 1)] = -1.0;
         omega_mat[(1, 0)] = 1.0;
+		let omega_mat=so_mat_to_vec(&omega_mat);
         let angular_vel = AngularVel(omega_mat);
 
         let objects = vec![hlist!(&mass, &pos, &inertia)];
@@ -556,6 +590,7 @@ mod tests {
         let mut omega_mat = SMatrix::<T, DIM, DIM>::zeros();
         omega_mat[(0, 1)] = -1.0;
         omega_mat[(1, 0)] = 1.0;
+		let omega_mat=so_mat_to_vec(&omega_mat);
         let angular_vel = AngularVel(omega_mat);
 
         let hlist_pat![angular_momentum] = angular_momentum_from_omega(hlist!(&total_inertia, &angular_vel));
@@ -582,7 +617,7 @@ mod tests {
         // so(3) 基向量顺序： (0,1), (0,2), (1,2) 对应角速度分量 ω_z, ω_y, ω_x? 需要根据代码约定。
         // 实际轨道惯量矩阵与自转惯量直接相加，测试仅验证线性关系，我们使用对角矩阵
         let mut inertia_mat =
-            OMatrix::<T, DimNameToSoDimNameType<DIM>, DimNameToSoDimNameType<DIM>>::zeros();
+            OMatrix::<T, ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>>::zeros();
         // 假设对角元素为 [I_xy, I_xz, I_yz] 分别对应 ω_z, ω_y, ω_x 的系数
         inertia_mat[(0, 0)] = 2.0; // I_zz?
         inertia_mat[(1, 1)] = 1.0;
@@ -596,6 +631,7 @@ mod tests {
         let mut omega_mat = SMatrix::<T, DIM, DIM>::zeros();
         omega_mat[(0, 1)] = -1.0;
         omega_mat[(1, 0)] = 1.0;
+		let omega_mat=so_mat_to_vec(&omega_mat);
         let angular_vel = AngularVel(omega_mat);
 
         let hlist_pat![angular_momentum] = angular_momentum_from_omega(hlist!(&total_inertia, &angular_vel));
@@ -634,6 +670,7 @@ mod tests {
         let mut l_mat = SMatrix::<T, DIM, DIM>::zeros();
         l_mat[(0, 1)] = -1.0;
         l_mat[(1, 0)] = 1.0;
+		let l_mat=so_mat_to_vec(&l_mat);
         let angular_momentum = AngularMomentum(l_mat);
 
         // 应该无法解出角速度（惯性矩阵奇异）
@@ -659,6 +696,7 @@ mod tests {
         let mut omega_mat = SMatrix::<T, D2, D2>::zeros();
         omega_mat[(0, 1)] = -1.0; // ω_{12} = -ω (so_to_vec 取上三角)
         omega_mat[(1, 0)] = 1.0;
+		let omega_mat=so_mat_to_vec(&omega_mat);
         let angular_vel = AngularVel(omega_mat);
 
 		let hlist_pat![angular_momentum]=angular_momentum_from_omega(hlist![&inertia,&angular_vel]);
@@ -670,7 +708,7 @@ mod tests {
 
 		let dt=1.0/8.0;
 
-		let rot=angular_vel_to_rotation(&angular_vel_s, dt);
+		let rot=angular_vel_to_rotation_matrix(&angular_vel_s, dt);
 
 		println!("{rot:?}");
     }
@@ -716,3 +754,122 @@ mod tests {
         assert_relative_eq!(inertia.0[(2, 2)], i12, epsilon = 1e-12);
     }
 }
+
+/// `Self:DimMin<Self, Output = Self>` checked by functions for square matrix
+pub trait DimSquare
+where Self:DimMin<Self, Output = Self>
+{
+	
+}
+
+impl<T> DimSquare for T
+where Self:DimMin<Self, Output = Self>
+{
+	
+}
+
+pub trait DimSquareSo
+where 
+	Self:DimToSoDim + DimName + DimSquare,
+{
+	
+}
+
+impl<const DIM:usize> DimSquareSo for Const<DIM>
+where 
+	Self:DimToSoDim + DimName + DimMin<Self, Output = Self>,
+{
+	
+}
+
+
+pub trait AllocatorSq<D:Dim> : Allocator<D,D>{}
+
+impl<D:Dim,T> AllocatorSq<D> for T
+where Self:Allocator<D,D>
+{
+	
+}
+
+/// `Self:Allocator<D>+AllocatorSq<D>`
+pub trait AllocatorVM<D:Dim> : Allocator<D>+AllocatorSq<D>{}
+
+impl<D:Dim,T> AllocatorVM<D> for T
+where Self:Allocator<D>+AllocatorSq<D>
+{
+	
+}
+
+pub trait AllocatorDimVMSoDimVM<D>
+where 
+	D:DimSquareSo,
+	<D as DimToSoDim>::SoDim:DimSquare,
+	Self:AllocatorVM<D>+AllocatorVM<DimToSoDimT<D>>
+{
+}
+
+impl<D:Dim,T> AllocatorDimVMSoDimVM<D> for T 
+where 
+	D:DimSquareSo,
+	<D as DimToSoDim>::SoDim:DimSquare,
+	Self:AllocatorVM<D>+AllocatorVM<DimToSoDimT<D>>
+{
+	
+}
+
+
+pub trait AllocatorSync<D:Dim,Num:RealField>:Allocator<D,Buffer<Num>:Send+Sync>
+{
+	
+}
+impl<D:Dim,Num:RealField,T> AllocatorSync<D,Num> for T
+where Self:Allocator<D,Buffer<Num>:Send+Sync>
+{
+	
+}
+
+pub trait AllocatorSyncSq<D:Dim,Num:RealField> : Allocator<D,D,Buffer<Num>:Send+Sync>{}
+
+impl<D:Dim,Num:RealField,T> AllocatorSyncSq<D,Num> for T
+where Self:Allocator<D,D,Buffer<Num>:Send+Sync>
+{
+	
+}
+
+/// `Self:Allocator<D>+AllocatorSq<D>`
+pub trait AllocatorSyncVMSq<D:Dim,Num:RealField> : AllocatorSync<D,Num>+AllocatorSyncSq<D,Num>{}
+
+impl<D:Dim,Num:RealField,T> AllocatorSyncVMSq<D,Num> for T
+where Self:AllocatorSync<D,Num>+AllocatorSyncSq<D,Num>
+{
+	
+}
+
+pub trait AllocatorSyncDimSqSoDimSq<D:DimToSoDim,Num:RealField>:AllocatorSyncVMSq<D,Num>+AllocatorSyncVMSq<DimToSoDimT<D>,Num>
+{
+}
+
+// pub trait DimSoDimAlloc<Num,DefaultAllocator>
+// where 
+// 	Self:DimSquareSo,
+// 	DimToSoDimT<Self>:Dim+DimSquare,
+// 	DefaultAllocator:AllocatorDimVMSoDimVM<Self>
+// {
+// 	type NBuffer;
+// 	type NSqBuffer;
+// 	type SoNBuffer;
+// 	type SoNSqBuffer;
+	
+// }
+
+// impl<T,Num:RealField,SoDim,DefaultAllocator> DimSoDimAlloc<Num,DefaultAllocator> for T
+// where 
+// 	T:DimSquareSo<SoDim = SoDim>,
+// 	SoDim:Dim+DimSquare,
+// 	DefaultAllocator:AllocatorDimVMSoDimVM<T>
+// {
+// 	type NBuffer=<DefaultAllocator as Allocator<T>>::Buffer<Num>;
+// 	type NSqBuffer=<DefaultAllocator as Allocator<T,T>>::Buffer<Num>;
+// 	type SoNBuffer=<DefaultAllocator as Allocator<DimToSoDimT<T>>>::Buffer<Num>;
+// 	type SoNSqBuffer=<DefaultAllocator as Allocator<DimToSoDimT<T>,DimToSoDimT<T>>>::Buffer<Num>;
+// }
