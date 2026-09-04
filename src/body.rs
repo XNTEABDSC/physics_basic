@@ -1,16 +1,13 @@
 // use wacky_bag_fixed::num::Num;
 
-use std::ops::Add;
 
 use frunk::{HList, Poly, hlist, hlist_pat};
 use nalgebra::allocator::Allocator;
 use nalgebra::{Const, DefaultAllocator, DimMin, DimName, RealField};
 use num_traits::Zero;
 use wacky_bag::utils::d_sphere_volume::d_sphere_volume_by_radius_pow;
-use wacky_bag_hlist::h_extend_by_fn::h_extend_by_fn_ref;
 // use wacky_bag_hlist::h_extend_by_fn::h_extend_by_fn_ref;
-use wacky_bag_hlist::h_list_helpers::{HToMut, HToRef, MapMutToRef, SetMut, Sum};
-use wacky_bag_hlist::output_map::HMappableFrom;
+use wacky_bag_hlist::h_list_helpers::{HToMut, HToRef, SetMut, Sum};
 
 use crate::stats::{Kinetic, Mass, Momentum, Pos, TimePass, Vel, Volume, mass_vel_2_kinetic};
 use crate::rotation::{AllocatorDimVMSoDimVM, AngularInertia, AngularKinetic, AngularMomentum, AngularVel, ConstDimToSoDimT, DimSquare, DimSquareSo, DimToSoDim, Rotation, RotationMatrix, angular_kinetic_from_inertia_agv, angular_momentum_from_omega, angular_velocity_from_momentum};

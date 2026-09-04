@@ -18,5 +18,3 @@ num-traits = "0.2.19"
 typenum = "1.19.0"
 frunk = "0.5.0"
 approx = "0.5.1"
-
-name_type_for_fn = {path = "../name_type_for_fn"}
