@@ -1,7 +1,7 @@
 use std::ops::{Add, AddAssign, Div, Mul, Rem, Sub};
 
 use crate::{
-    stat_to_change_type::StatToChangeType, stats::{Mass, Pos}
+    stat_to_change_type::StatToChangeType, stats::{Mass, Momentum, Pos}
 };
 use derive_more::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use frunk::{HList, hlist, hlist_pat};
@@ -243,15 +243,53 @@ where
     DefaultAllocator: Allocator<ConstDimToSoDimT<DIM>>,
 {
     // const N: usize = D * (D - 1) / 2;
-    let mut vec = OVector::<T, ConstDimToSoDimT<DIM>>::zeros();
-    let mut idx = 0;
-    for i in 0..DIM {
-        for j in i + 1..DIM {
-            vec[idx] = omega[(i, j)];
-            idx += 1;
-        }
-    }
-    vec
+    // let mut vec = OVector::<T, ConstDimToSoDimT<DIM>>::zeros();
+    // let mut idx = 0;
+    // for i in 0..DIM {
+    //     for j in i + 1..DIM {
+    //         vec[idx] = omega[(i, j)];
+    //         idx += 1;
+    //     }
+    // }
+    // vec
+
+    let mut ij=(0..DIM).into_iter().flat_map(|i| (i+1..DIM).into_iter().map(move |j|(i,j)));
+
+    // let mut i=0;
+    // let mut j=0;
+    OVector::<T, ConstDimToSoDimT<DIM>>::from_fn(move |_idx,_|{
+        let (i,j)=ij.next().unwrap();
+        omega[(i, j)]
+    })
+}
+
+pub fn so_mat_fn_to_vec<T: RealField + Copy, const DIM: usize,F>(
+    f:&mut F
+) -> OVector<T, ConstDimToSoDimT<DIM>>
+where
+    Const<DIM>: DimToSoDim,
+    DefaultAllocator: Allocator<ConstDimToSoDimT<DIM>>,
+    F:FnMut(usize,usize)->T
+{
+    // const N: usize = D * (D - 1) / 2;
+    // let mut vec = OVector::<T, ConstDimToSoDimT<DIM>>::zeros();
+    // let mut idx = 0;
+    // for i in 0..DIM {
+    //     for j in i + 1..DIM {
+    //         vec[idx] = f(i, j);
+    //         idx += 1;
+    //     }
+    // }
+    // vec
+
+    let mut ij=(0..DIM).into_iter().flat_map(|i| (i+1..DIM).into_iter().map(move |j|(i,j)));
+
+    // let mut i=0;
+    // let mut j=0;
+    OVector::<T, ConstDimToSoDimT<DIM>>::from_fn(move |_idx,_|{
+        let (i,j)=ij.next().unwrap();
+        f(i,j)
+    })
 }
 
 /// 将so(n)基下的向量转换回反对称矩阵
@@ -484,12 +522,47 @@ where
     hlist![AngularKinetic( half * omega_vec.dot(&i_omega) )]
 }
 
+pub fn angular_momentum_from_momentum_pos<Num: RealField + Copy, const DIM: usize>(
+    r: &Pos<Num, DIM>,
+    momentum: &Momentum<Num, DIM>,
+) -> AngularMomentum<Num,DIM>
+where Const<DIM>:DimToSoDim,DefaultAllocator:Allocator<ConstDimToSoDimT<DIM>>
+{
+    let r=r.0;
+    let m=momentum.0;
+    
+    AngularMomentum(
+        so_mat_fn_to_vec(
+            &mut move |i,j|{
+                r[i]*m[j]-r[j]*m[i]
+            }
+        )
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use approx::assert_relative_eq;
     use frunk::hlist;
     use nalgebra::{Const, OMatrix, SMatrix, SVector};
+
+    #[test]
+    fn test_iter(){
+        const DIM:usize=3;
+        let mut ijiter=(0..DIM).into_iter().flat_map(|i| (i+1..DIM).into_iter().map(move |j|(i,j)));
+        for i in 0..DIM {
+            for j in i + 1..DIM {
+                let (iteri,iterj)=ijiter.next().unwrap();
+                assert_eq!((i,j),(iteri,iterj));
+                // vec[idx] = f(i, j);
+                // idx += 1;
+            }
+        }
+        // vec
+
+        
+    }
 
     // 辅助函数：创建零惯量（质点）
     fn zero_inertia<T: RealField + Copy, const D: usize>() -> AngularInertia<T, D>

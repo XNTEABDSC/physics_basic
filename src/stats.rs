@@ -12,7 +12,7 @@ use derive_more::{Add,AddAssign,Sub,SubAssign,Neg};
 
 
 
-#[derive(Default,Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
+#[derive(Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
 pub struct Mass<Num>(pub Num);
 
 impl<Num:Zero> Zero for Mass<Num> {
@@ -44,7 +44,7 @@ impl<Num:Zero> Zero for $t<Num> {
 // }
 
 /// Time pass of this object for this iteration of simulation
-#[derive(Default,Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
+#[derive(Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
 pub struct TimePass<Num>(pub Num);
 
 derive_zero!(TimePass);
