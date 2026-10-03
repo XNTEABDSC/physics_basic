@@ -540,6 +540,26 @@ where Const<DIM>:DimToSoDim,DefaultAllocator:Allocator<ConstDimToSoDimT<DIM>>
     )
 }
 
+pub fn rotation_transform<Num:RealField+Copy,const DIM:usize>(
+	r:&RotationMatrix<Num,DIM>,
+	b:&SMatrix<Num,DIM,DIM>
+)->SMatrix<Num,DIM,DIM>
+{
+	r.0*b*r.0.transpose()
+}
+
+pub fn rotation_transform_so<Num:RealField+Copy,const DIM:usize>(
+	r:&RotationMatrix<Num,DIM>,
+	b:&OVector<Num,ConstDimToSoDimT<DIM>>
+)->OVector<Num,ConstDimToSoDimT<DIM>>
+where 
+    Const<DIM>: DimToSoDim,
+    DefaultAllocator: Allocator<ConstDimToSoDimT<DIM>>
+        + Allocator<Const<DIM>, Const<DIM>, Buffer<Num> = nalgebra::ArrayStorage<Num, DIM, DIM>>,
+{
+	so_mat_to_vec(&rotation_transform(r, &so_vec_to_mat(b)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
