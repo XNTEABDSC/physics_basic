@@ -333,22 +333,22 @@ where
             for i in 0..DIM {
                 for j in i + 1..DIM {
                     let term1 = if b == i {
-                        mass * r[a] * r[j]
+                        -mass * r[a] * r[j]
                     } else {
                         T::zero()
                     };
                     let term2 = if b == j {
-                        -mass * r[a] * r[i]
+                        mass * r[a] * r[i]
                     } else {
                         T::zero()
                     };
                     let term3 = if a == i {
-                        -mass * r[b] * r[j]
+                        mass * r[b] * r[j]
                     } else {
                         T::zero()
                     };
                     let term4 = if a == j {
-                        mass * r[b] * r[i]
+                        -mass * r[b] * r[i]
                     } else {
                         T::zero()
                     };
@@ -518,7 +518,7 @@ where
 {
     let omega_vec = &angular_vel.0;
     let i_omega = &inertia.0 * omega_vec.clone();
-    let half = Num::p2();
+    let half = Num::one()/Num::p2();
     hlist![AngularKinetic( half * omega_vec.dot(&i_omega) )]
 }
 
@@ -534,7 +534,7 @@ where Const<DIM>:DimToSoDim,DefaultAllocator:Allocator<ConstDimToSoDimT<DIM>>
     AngularMomentum(
         so_mat_fn_to_vec(
             &mut move |i,j|{
-                r[i]*m[j]-r[j]*m[i]
+                r[j]*m[i]-r[i]*m[j]
             }
         )
     )
@@ -626,15 +626,14 @@ mod tests {
         // 反对称矩阵只有一个独立分量，即 L_{12} = -1？需要根据约定：
         // 角速度 ω 对应矩阵 [0, -ω; ω, 0]，角动量应为 [0, -L; L, 0]，其中 L = Iω = 1
         // 所以 L_{12} = -1
-        let expected_l12 = 1.0;
-        assert_relative_eq!(angular_momentum.0[(0, 1)], expected_l12, epsilon = 1e-12);
-        assert_relative_eq!(angular_momentum.0[(1, 0)], -expected_l12, epsilon = 1e-12);
+        let expected_l12 = -1.0;
+        assert_relative_eq!(angular_momentum.0[0], expected_l12, epsilon = 1e-12);
+        // assert_relative_eq!(angular_momentum.0[(1, 0)], -expected_l12, epsilon = 1e-12);
 
         // 反解角速度
         let hlist_pat![AngularVel(solved_omega)] = angular_velocity_from_momentum(hlist!(total_inertia, &angular_momentum))
             .expect("Should be invertible");
-        assert_relative_eq!(solved_omega[(0, 1)], angular_vel.0[(0, 1)], epsilon = 1e-12);
-        assert_relative_eq!(solved_omega[(1, 0)], angular_vel.0[(1, 0)], epsilon = 1e-12);
+        assert_relative_eq!(solved_omega, angular_vel.0, epsilon = 1e-12);
     }
 
     #[test]
@@ -690,7 +689,7 @@ mod tests {
 
         // 理论角动量：L = m1 r1^2 ω + m2 r2^2 ω = (1*1^2 + 2*1^2) * 1 = 3，方向沿 z
         // 因此反对称矩阵应为 3 * omega_mat
-        let expected = -3.0 * omega_mat;
+        let expected = 3.0 * omega_mat;   // ★ 与修复后的 I_so 符号一致
         assert_relative_eq!(angular_momentum.0, expected, epsilon = 1e-12);
 
         // 反解
@@ -845,6 +844,45 @@ mod tests {
         assert_relative_eq!(inertia.0[(0, 0)], i01, epsilon = 1e-12);
         assert_relative_eq!(inertia.0[(1, 1)], i02, epsilon = 1e-12);
         assert_relative_eq!(inertia.0[(2, 2)], i12, epsilon = 1e-12);
+    }
+
+    #[test]
+    fn test_rotation_direction_2d() {
+        use nalgebra::Vector2;
+        type T = f64;
+        const DIM: usize = 2;
+
+        // ω_z = +1（物理上逆时针 / 右手定则绕 z 轴正方向）
+        // AngularVel 存 so 上三角 → vec[0] = -ω_z = -1
+        let agv = AngularVel::<T, DIM>(SVector::<T, 1>::new(-1.0));
+
+        let dt = std::f64::consts::FRAC_PI_2; // 转 90°
+        let r0 = RotationMatrix::<T, DIM>::default();
+        let r1 = angular_vel_to_rotation_matrix(&agv, dt)*r0.0;
+
+        // (1,0) 绕 z 轴逆时针 90° → (0,1)
+        let v = r1 * Vector2::<T>::new(1.0, 0.0);
+        assert_relative_eq!(v[0], 0.0, epsilon = 1e-12);
+        assert_relative_eq!(v[1], 1.0, epsilon = 1e-12);
+    }
+
+    #[test]
+    fn test_angular_kinetic_positive_2d() {
+        type T = f64;
+        const DIM: usize = 2;
+
+        let mass = Mass(1.0);
+        let pos = Pos(SVector::<T, DIM>::new(1.0, 0.0));
+        let inertia = zero_inertia::<T, DIM>();
+        let objects = vec![hlist!(&mass, &pos, &inertia)];
+        let total_inertia = total_inertia_matrix(objects);
+
+        let agv = AngularVel::<T, DIM>(SVector::<T, 1>::new(-1.0)); // ω_z = +1
+        let hlist_pat![ek] = angular_kinetic_from_inertia_agv(hlist!(&total_inertia, &agv));
+
+        // E = ½ m r² ω² = 0.5，必须为正
+        assert_relative_eq!(ek.0, 0.5, epsilon = 1e-12);
+        assert!(ek.0 > 0.0);
     }
 }
 
