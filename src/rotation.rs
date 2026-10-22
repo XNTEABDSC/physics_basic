@@ -1,8 +1,8 @@
-use std::ops::{Add, AddAssign, Div, Mul, Rem, Sub};
+use std::ops::{Add, Div, Mul, Rem, Sub};
 
-use crate::{
-    stat_to_change_type::StatToChangeType, stats::{Mass, Momentum, Pos}
-};
+use crate::
+    stats::{Mass, Momentum, Pos}
+;
 use derive_more::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use frunk::{HList, hlist, hlist_pat};
 use nalgebra::{
@@ -253,14 +253,15 @@ where
     // }
     // vec
 
-    let mut ij=(0..DIM).into_iter().flat_map(|i| (i+1..DIM).into_iter().map(move |j|(i,j)));
+    // let mut ij=(0..DIM).into_iter().flat_map(|i| (i+1..DIM).into_iter().map(move |j|(i,j)));
 
-    // let mut i=0;
-    // let mut j=0;
-    OVector::<T, ConstDimToSoDimT<DIM>>::from_fn(move |_idx,_|{
-        let (i,j)=ij.next().unwrap();
-        omega[(i, j)]
-    })
+    // // let mut i=0;
+    // // let mut j=0;
+    // OVector::<T, ConstDimToSoDimT<DIM>>::from_fn(move |_idx,_|{
+    //     let (i,j)=ij.next().unwrap();
+    //     omega[(i, j)]
+    // })
+    so_mat_fn_to_vec(&mut |i,j|omega[(i,j)])
 }
 
 pub fn so_mat_fn_to_vec<T: RealField + Copy, const DIM: usize,F>(
@@ -364,7 +365,6 @@ where
 
 /// 计算总转动惯量矩阵（在so(n)基下）
 pub fn total_inertia_matrix<'a, T: RealField + Copy, const DIM: usize>(
-    // objects: &[(T, SVector<T, D>, SMatrix<T, {to_so_size!(D)}, {to_so_size!(D)}>)],
     objects: impl IntoIterator<Item = HList!(&'a Mass<T>, &'a Pos<T, DIM>, &'a AngularInertia<T, DIM>)>,
 ) -> AngularInertia<T, DIM>
 where
@@ -389,15 +389,14 @@ where
 
 /// 根据角速度计算总角动量（反对称矩阵形式）
 pub fn angular_momentum_from_omega<T: RealField + Copy, const DIM: usize>(
-    hlist_pat![total_inertia, omega]: HList!(&AngularInertia<T,DIM>,&AngularVel<T, DIM>),
+    hlist_pat![total_inertia, omega]: HList!(&AngularInertia<T,DIM>,AngularVel<T, DIM>),
 ) -> HList!(AngularMomentum<T, DIM>)
-//SMatrix<T, DIM, DIM>
 where
     Const<DIM>: DimToSoDim + DimName,
     DefaultAllocator: Allocator<ConstDimToSoDimT<DIM>>
         + Allocator<ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>>,
 {
-    let omega_vec = &omega.0;
+    let omega_vec = omega.0;
     let total_inertia = &total_inertia.0;
     let l_vec = total_inertia * omega_vec;
     hlist![AngularMomentum(l_vec)]
@@ -446,7 +445,7 @@ where
 
 /// 计算 D 维均匀超球体（半径为 r）的转动惯量。
 /// 结果在 so(n) 基下是一个对角矩阵，所有对角元相等，值为 2 M r^2 / (n+2)。
-pub fn sphere_inertia<T: RealField + Copy, const DIM: usize>(
+pub fn angular_inertia_sphere<T: RealField + Copy, const DIM: usize>(
     mass: T,
     radius: T,
 ) -> AngularInertia<T, DIM>
@@ -470,7 +469,7 @@ where
 /// 计算 D 维均匀超长方体（边平行于坐标轴，中心在原点）的转动惯量。
 /// side_lengths 是一个长度为 D 的向量，给出每个维度的边长。
 /// 结果在 so(n) 基下是对角矩阵，对应平面 (i,j) 的对角元为 M (l_i^2 + l_j^2) / 12。
-pub fn cuboid_inertia<T: RealField + Copy, const DIM: usize>(
+pub fn angular_inertia_cuboid<T: RealField + Copy, const DIM: usize>(
     mass: T,
     side_lengths: &SVector<T, DIM>,
 ) -> AngularInertia<T, DIM>
@@ -518,7 +517,7 @@ where
 {
     let omega_vec = &angular_vel.0;
     let i_omega = &inertia.0 * omega_vec.clone();
-    let half = Num::one()/Num::p2();
+    let half = Num::frac_1_2();
     hlist![AngularKinetic( half * omega_vec.dot(&i_omega) )]
 }
 
@@ -542,7 +541,7 @@ where Const<DIM>:DimToSoDim,DefaultAllocator:Allocator<ConstDimToSoDimT<DIM>>
 
 pub fn rotation_transform<Num:RealField+Copy,const DIM:usize>(
 	r:&RotationMatrix<Num,DIM>,
-	b:&SMatrix<Num,DIM,DIM>
+	b:SMatrix<Num,DIM,DIM>
 )->SMatrix<Num,DIM,DIM>
 {
 	r.0*b*r.0.transpose()
@@ -557,7 +556,7 @@ where
     DefaultAllocator: Allocator<ConstDimToSoDimT<DIM>>
         + Allocator<Const<DIM>, Const<DIM>, Buffer<Num> = nalgebra::ArrayStorage<Num, DIM, DIM>>,
 {
-	so_mat_to_vec(&rotation_transform(r, &so_vec_to_mat(b)))
+	so_mat_to_vec(&rotation_transform(r, so_vec_to_mat(b)))
 }
 
 #[cfg(test)]
@@ -620,7 +619,7 @@ mod tests {
         let total_inertia = total_inertia_matrix(objects);
 
         // 计算角动量
-        let hlist_pat![angular_momentum] = angular_momentum_from_omega(hlist!(&total_inertia, &angular_vel));
+        let hlist_pat![angular_momentum] = angular_momentum_from_omega(hlist!(&total_inertia, angular_vel));
 
         // 理论值：对于 2D 单质点，角动量应为 m * r^2 * ω = 1 * 1^2 * 1 = 1
         // 反对称矩阵只有一个独立分量，即 L_{12} = -1？需要根据约定：
@@ -653,7 +652,7 @@ mod tests {
 
         let objects = vec![hlist!(&mass, &pos, &inertia)];
         let total_inertia = total_inertia_matrix(objects);
-        let hlist_pat![angular_momentum] = angular_momentum_from_omega(hlist!(&total_inertia, &angular_vel));
+        let hlist_pat![angular_momentum] = angular_momentum_from_omega(hlist!(&total_inertia, angular_vel));
 
         // 单质点系统奇异，无法唯一确定角速度，应返回 None
         let result = angular_velocity_from_momentum(hlist!(total_inertia, &angular_momentum));
@@ -685,7 +684,7 @@ mod tests {
 		let omega_mat=so_mat_to_vec(&omega_mat);
         let angular_vel = AngularVel(omega_mat);
 
-        let hlist_pat![angular_momentum] = angular_momentum_from_omega(hlist!(&total_inertia, &angular_vel));
+        let hlist_pat![angular_momentum] = angular_momentum_from_omega(hlist!(&total_inertia, angular_vel));
 
         // 理论角动量：L = m1 r1^2 ω + m2 r2^2 ω = (1*1^2 + 2*1^2) * 1 = 3，方向沿 z
         // 因此反对称矩阵应为 3 * omega_mat
@@ -726,7 +725,7 @@ mod tests {
 		let omega_mat=so_mat_to_vec(&omega_mat);
         let angular_vel = AngularVel(omega_mat);
 
-        let hlist_pat![angular_momentum] = angular_momentum_from_omega(hlist!(&total_inertia, &angular_vel));
+        let hlist_pat![angular_momentum] = angular_momentum_from_omega(hlist!(&total_inertia, angular_vel));
 
         // 预期角动量：自转贡献 L_self = I * ω_vec，其中 ω_vec = so_to_vec(omega) = [-1, 0, 0]（因为 (0,1) 元素为 -1）
         // 所以 L_vec = [2*(-1), 1*0, 1*0] = [-2, 0, 0]，对应反对称矩阵：只有 (0,1) 分量为 -2
@@ -775,13 +774,12 @@ mod tests {
     type T = f64;
     const D2: usize = 2;
     const D3: usize = 3;
-    const D4: usize = 4;
 
     #[test]
     fn test_sphere_2d() {
         let mass = 1.0;
         let radius = 1.0;
-        let inertia = sphere_inertia::<T, D2>(mass, radius);
+        let inertia = angular_inertia_sphere::<T, D2>(mass, radius);
 		// println!("{inertia:?}");
 		
 		// 角速度：绕垂直轴旋转，ω = 1
@@ -791,7 +789,7 @@ mod tests {
 		let omega_mat=so_mat_to_vec(&omega_mat);
         let angular_vel = AngularVel(omega_mat);
 
-		let hlist_pat![angular_momentum]=angular_momentum_from_omega(hlist![&inertia,&angular_vel]);
+		let hlist_pat![angular_momentum]=angular_momentum_from_omega(hlist![&inertia,angular_vel]);
 
 		let hlist_pat![angular_vel_s]=angular_velocity_from_momentum(hlist![inertia,&angular_momentum]).unwrap();
 
@@ -809,7 +807,7 @@ mod tests {
     fn test_sphere_3d() {
         let mass = 1.0;
         let radius = 1.0;
-        let inertia = sphere_inertia::<T, D3>(mass, radius);
+        let inertia = angular_inertia_sphere::<T, D3>(mass, radius);
         // 3D 球体: I = 2/5 M R^2 = 0.4
         let expected = 0.4;
         // so(3) 基有 3 个对角元，应全部相等
@@ -822,7 +820,7 @@ mod tests {
     fn test_cuboid_3d() {
         let mass = 1.0;
         let sides = SVector::<T, D3>::new(2.0, 2.0, 2.0); // 立方体边长 2
-        let inertia = cuboid_inertia::<T, D3>(mass, &sides);
+        let inertia = angular_inertia_cuboid::<T, D3>(mass, &sides);
         // 对于立方体，绕 x、y、z 轴的转动惯量均为 M*(a^2+a^2)/12 = 2M a^2/12 = M a^2/6
         // a=2 => 4/6=2/3≈0.6667，但注意 so(3) 基顺序：(0,1) 对应绕 z 轴，(0,2) 绕 y 轴，(1,2) 绕 x 轴
         let expected = 2.0 / 3.0; // 0.666666...
@@ -836,7 +834,7 @@ mod tests {
     fn test_cuboid_3d_rect() {
         let mass = 1.0;
         let sides = SVector::<T, D3>::new(2.0, 4.0, 6.0);
-        let inertia = cuboid_inertia::<T, D3>(mass, &sides);
+        let inertia = angular_inertia_cuboid::<T, D3>(mass, &sides);
         // 手动计算各平面惯量
         let i01 = mass * (2.0*2.0 + 4.0*4.0) / 12.0; // (2^2+4^2)/12 = (4+16)/12=20/12=1.6667
         let i02 = mass * (2.0*2.0 + 6.0*6.0) / 12.0; // (4+36)/12=40/12=3.3333

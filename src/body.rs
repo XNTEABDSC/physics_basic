@@ -164,7 +164,7 @@ where
         DimMin<ConstDimToSoDimT<DIM>, Output = ConstDimToSoDimT<DIM>>,
 
 {
-	angular_momentum_from_omega(hlist![agi,&agv])
+	angular_momentum_from_omega(hlist![agi,agv])
 }
 
 pub type CalculateBodyStateInput<Num,const DIM:usize>=Sum<CalculatePositionStateInput<Num,DIM>,CalculateAngularStateInput<Num,DIM>>;
