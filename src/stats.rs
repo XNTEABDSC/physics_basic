@@ -1,6 +1,6 @@
 
 use frunk::{HList, hlist, hlist_pat};
-use nalgebra::{RealField, SVector, Scalar};
+use nalgebra::{Const, DefaultAllocator, OVector, RealField, SVector, Scalar, allocator::Allocator};
 use num_traits::Zero;
 // use wacky_bag_fixed::vec_fix::VecFix;
 use wacky_bag::utils::num_extend::NumExtends;
@@ -12,18 +12,24 @@ use derive_more::{Add,AddAssign,Sub,SubAssign,Neg};
 
 
 
-#[derive(Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
+#[derive(Clone, Copy, Debug, Add, AddAssign, Sub, SubAssign, Neg)]
 pub struct Mass<Num>(pub Num);
 
-impl<Num:Zero> Zero for Mass<Num> {
-	fn zero() -> Self {
-		Self(Num::zero())
-	}
+// impl<Num: RealField> Default for Mass<Num> {
+//     fn default() -> Self {
+// 		Self(Num::zero())
+// 	}
+// }
 
-	fn is_zero(&self) -> bool {
-		Num::is_zero(&self.0)
-	}
-}
+// impl<Num:Zero> Zero for Mass<Num> {
+// 	fn zero() -> Self {
+// 		Self(Num::zero())
+// 	}
+
+// 	fn is_zero(&self) -> bool {
+// 		Num::is_zero(&self.0)
+// 	}
+// }
 
 macro_rules! derive_zero {
 	($t:tt) => {
@@ -36,8 +42,14 @@ impl<Num:Zero> Zero for $t<Num> {
 		Num::is_zero(&self.0)
 	}
 }
+impl<Num: Zero> Default for $t<Num> {
+    fn default() -> Self {
+		Self(Num::zero())
+	}
+}
 	};
 }
+derive_zero!(Mass);
 
 // impl Zero for Mass<> {
 	
@@ -71,7 +83,7 @@ impl<Num,const DIM:usize> Zero for $type <Num,DIM>
 	}
 }
 
-impl<Num: std::ops::Neg+Scalar+simba::scalar::ClosedNeg, const DIM: usize> std::ops::Neg for $type <Num, DIM> {
+impl<Num: RealField, const DIM: usize> std::ops::Neg for $type <Num, DIM> {
     type Output=Self;
 
 	fn neg(self) -> Self::Output {
@@ -84,8 +96,14 @@ impl<Num: std::ops::Neg+Scalar+simba::scalar::ClosedNeg, const DIM: usize> std::
 
 //derive_add_traits!{Mass}
 
-#[derive(Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign)]
-pub struct Pos<Num,const DIM:usize>(pub SVector<Num,DIM>);
+#[derive(Clone, Debug, Add, AddAssign, Sub, SubAssign)]
+pub struct Pos<Num,const DIM:usize>(pub OVector<Num,Const<DIM>>)
+where Num:RealField,DefaultAllocator:Allocator<Const<DIM>>;
+
+impl<Num: RealField + Copy, const DIM: usize> Copy for Pos<Num, DIM>
+where DefaultAllocator:Allocator<Const<DIM>,Buffer<Num>:Copy>
+{
+}
 	// where Num:RealField;
 
 derive_for_s_vector!{Pos}
@@ -95,16 +113,28 @@ derive_for_s_vector!{Pos}
 //derive_add_traits!(Pos<3>);
 //derive_add_traits!(Pos<4>);
 
-#[derive(Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign)]
-pub struct Vel<Num,const DIM:usize>(pub SVector<Num,DIM>);
+#[derive(Clone, Debug, Add, AddAssign, Sub, SubAssign)]
+pub struct Vel<Num,const DIM:usize>(pub OVector<Num,Const<DIM>>)
+where Num:RealField,DefaultAllocator:Allocator<Const<DIM>>;
+
+impl<Num: Copy, const DIM: usize> Copy for Vel<Num, DIM>
+where Num:RealField,DefaultAllocator:Allocator<Const<DIM>,Buffer<Num>:Copy>
+{
+}
 
 derive_for_s_vector!{Vel}
 
 //derive_add_traits!(Vel);
 
 
-#[derive(Clone,Copy,Debug)]
-pub struct DirVec<Num,const DIM:usize>(pub SVector<Num,DIM>);
+#[derive(Clone, Debug)]
+pub struct DirVec<Num,const DIM:usize>(pub OVector<Num,Const<DIM>>)
+where Num:RealField,DefaultAllocator:Allocator<Const<DIM>>;
+
+impl<Num: Copy, const DIM: usize> Copy for DirVec<Num, DIM>
+where Num:RealField,DefaultAllocator:Allocator<Const<DIM>,Buffer<Num>:Copy>
+{
+}
 
 impl<Num,const DIM:usize> Default for DirVec<Num,DIM>
 	where Num:RealField
@@ -123,7 +153,7 @@ pub struct Agv<const DIM:usize>(pub CMatrix<Num,DIM,DIM>);
 
  */
 
-#[derive(Default,Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
+#[derive(Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
 pub struct Energy<Num>(pub Num);
 
 derive_zero!(Energy);
@@ -132,15 +162,21 @@ derive_zero!(Energy);
 //derive_add_traits!(Energy);
 
 
-#[derive(Clone, Copy, Debug, Add, AddAssign, Sub, SubAssign)]
-pub struct Momentum<Num,const DIM:usize>(pub SVector<Num,DIM>);
+#[derive(Clone, Debug, Add, AddAssign, Sub, SubAssign)]
+pub struct Momentum<Num,const DIM:usize>(pub OVector<Num,Const<DIM>>)
+where Num:RealField,DefaultAllocator:Allocator<Const<DIM>>;
+
+impl<Num: Copy, const DIM: usize> Copy for Momentum<Num, DIM>
+where Num:RealField,DefaultAllocator:Allocator<Const<DIM>,Buffer<Num>:Copy>
+{
+}
 
 
 derive_for_s_vector!{Momentum}
 
 //derive_add_traits!(Momentum);
 
-#[derive(Default, Clone, Copy, Debug,Add,AddAssign,Sub,SubAssign,Neg)]
+#[derive(Clone, Copy, Debug,Add,AddAssign,Sub,SubAssign,Neg)]
 pub struct Kinetic<Num>(pub Num);
 
 derive_zero!(Kinetic);
@@ -160,7 +196,7 @@ pub fn mass_vel_2_kinetic<Num:RealField+Copy,const DIM:usize>(hlist_pat![mass,ve
 	]
 }
 
-#[derive(Default,Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
+#[derive(Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
 pub struct Volume<Num>(pub Num);
 
 derive_zero!(Volume);

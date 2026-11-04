@@ -886,97 +886,61 @@ mod tests {
 
 /// `Self:DimMin<Self, Output = Self>` checked by functions for square matrix
 pub trait DimSquare
-where Self:DimMin<Self, Output = Self>
-{
-	
-}
+where Self:DimMin<Self, Output = Self>{}
 
 impl<T> DimSquare for T
-where Self:DimMin<Self, Output = Self>
-{
-	
-}
+where Self:DimMin<Self, Output = Self>{}
 
 pub trait DimSquareSo
 where 
-	Self:DimToSoDim + DimName + DimSquare,
-{
-	
-}
+	Self:DimToSoDim + DimName + DimSquare,{}
 
 impl<const DIM:usize> DimSquareSo for Const<DIM>
 where 
-	Self:DimToSoDim + DimName + DimMin<Self, Output = Self>,
-{
-	
-}
+	Self:DimToSoDim + DimName + DimMin<Self, Output = Self>,{}
 
 
 pub trait AllocatorSq<D:Dim> : Allocator<D,D>{}
 
 impl<D:Dim,T> AllocatorSq<D> for T
-where Self:Allocator<D,D>
-{
-	
-}
+where Self:Allocator<D,D>{}
 
-/// `Self:Allocator<D>+AllocatorSq<D>`
 pub trait AllocatorVM<D:Dim> : Allocator<D>+AllocatorSq<D>{}
 
 impl<D:Dim,T> AllocatorVM<D> for T
-where Self:Allocator<D>+AllocatorSq<D>
-{
-	
-}
+where Self:Allocator<D>+AllocatorSq<D>{}
 
 pub trait AllocatorDimVMSoDimVM<D>
 where 
 	D:DimSquareSo,
 	<D as DimToSoDim>::SoDim:DimSquare,
-	Self:AllocatorVM<D>+AllocatorVM<DimToSoDimT<D>>
-{
-}
+	Self:AllocatorVM<D>+AllocatorVM<DimToSoDimT<D>>{}
 
 impl<D:Dim,T> AllocatorDimVMSoDimVM<D> for T 
 where 
 	D:DimSquareSo,
 	<D as DimToSoDim>::SoDim:DimSquare,
-	Self:AllocatorVM<D>+AllocatorVM<DimToSoDimT<D>>
-{
-	
-}
+	Self:AllocatorVM<D>+AllocatorVM<DimToSoDimT<D>>{}
 
 
-pub trait AllocatorSync<D:Dim,Num:RealField>:Allocator<D,Buffer<Num>:Send+Sync>
-{
-	
-}
+pub trait AllocatorSync<D:Dim,Num:RealField>:Allocator<D,Buffer<Num>:Send+Sync>{}
 impl<D:Dim,Num:RealField,T> AllocatorSync<D,Num> for T
-where Self:Allocator<D,Buffer<Num>:Send+Sync>
-{
-	
-}
+where Self:Allocator<D,Buffer<Num>:Send+Sync>{}
 
 pub trait AllocatorSyncSq<D:Dim,Num:RealField> : Allocator<D,D,Buffer<Num>:Send+Sync>{}
 
 impl<D:Dim,Num:RealField,T> AllocatorSyncSq<D,Num> for T
-where Self:Allocator<D,D,Buffer<Num>:Send+Sync>
-{
-	
-}
+where Self:Allocator<D,D,Buffer<Num>:Send+Sync>{}
 
-/// `Self:Allocator<D>+AllocatorSq<D>`
 pub trait AllocatorSyncVMSq<D:Dim,Num:RealField> : AllocatorSync<D,Num>+AllocatorSyncSq<D,Num>{}
 
 impl<D:Dim,Num:RealField,T> AllocatorSyncVMSq<D,Num> for T
-where Self:AllocatorSync<D,Num>+AllocatorSyncSq<D,Num>
-{
-	
-}
+where Self:AllocatorSync<D,Num>+AllocatorSyncSq<D,Num>{}
 
-pub trait AllocatorSyncDimSqSoDimSq<D:DimToSoDim,Num:RealField>:AllocatorSyncVMSq<D,Num>+AllocatorSyncVMSq<DimToSoDimT<D>,Num>
-{
-}
+pub trait AllocatorSyncDimSqSoDimSq<D:DimToSoDim,Num:RealField>:AllocatorSyncVMSq<D,Num>+AllocatorSyncVMSq<DimToSoDimT<D>,Num>{}
+
+impl<D:DimToSoDim,Num:RealField,T> AllocatorSyncDimSqSoDimSq<D,Num> for T
+where T:AllocatorSyncVMSq<D,Num>+AllocatorSyncVMSq<DimToSoDimT<D>,Num>{}
 
 // pub trait DimSoDimAlloc<Num,DefaultAllocator>
 // where 
