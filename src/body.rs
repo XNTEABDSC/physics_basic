@@ -146,7 +146,7 @@ where Const<DIM>:DimSquare
             sum += mat.determinant();
         }
 
-        let fact = Num::from_f64(factorial(DIM).unwrap() as f64).unwrap();
+        let fact = Num::from_usize(factorial(DIM).unwrap()).unwrap();
 
         (sum / fact).abs()
     }

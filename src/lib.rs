@@ -7,4 +7,5 @@ pub mod rotation;
 pub mod stat_to_change_type;
 pub mod collide;
 pub mod linear_equation;
+pub mod utils;
 // pub mod transform;

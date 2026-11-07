@@ -6,54 +6,12 @@ use num_traits::Zero;
 use wacky_bag::utils::num_extend::NumExtends;
 use derive_more::{Add,AddAssign,Sub,SubAssign,Neg};
 
-// use crate::{num::Num};
-
-
-
-
+use crate::derive_zero;
 
 #[derive(Clone, Copy, Debug, Add, AddAssign, Sub, SubAssign, Neg)]
 pub struct Mass<Num>(pub Num);
 
-// impl<Num: RealField> Default for Mass<Num> {
-//     fn default() -> Self {
-// 		Self(Num::zero())
-// 	}
-// }
-
-// impl<Num:Zero> Zero for Mass<Num> {
-// 	fn zero() -> Self {
-// 		Self(Num::zero())
-// 	}
-
-// 	fn is_zero(&self) -> bool {
-// 		Num::is_zero(&self.0)
-// 	}
-// }
-
-macro_rules! derive_zero {
-	($t:tt) => {
-impl<Num:Zero> Zero for $t<Num> {
-	fn zero() -> Self {
-		Self(Num::zero())
-	}
-
-	fn is_zero(&self) -> bool {
-		Num::is_zero(&self.0)
-	}
-}
-impl<Num: Zero> Default for $t<Num> {
-    fn default() -> Self {
-		Self(Num::zero())
-	}
-}
-	};
-}
 derive_zero!(Mass);
-
-// impl Zero for Mass<> {
-	
-// }
 
 /// Time pass of this object for this iteration of simulation
 #[derive(Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]

@@ -1,14 +1,14 @@
 use std::ops::{Add, Div, Mul, Rem, Sub};
 
 use crate::
-    stats::{Mass, Momentum, Pos}
+    stats::{Mass, Momentum, Pos, Vel}
 ;
 use derive_more::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use frunk::{HList, hlist, hlist_pat};
 use nalgebra::{
     Const, DefaultAllocator, Dim, DimMin, DimName, LU, OMatrix, OVector, RealField, SMatrix, SVector, ToConst, ToTypenum, allocator::Allocator,
 };
-use num_traits::Zero;
+use num_traits::{Num, Zero};
 use typenum::{U0, U1, U2};
 use wacky_bag::utils::num_extend::NumExtends;
 // use simba::scalar::FixedI32F32;
@@ -396,10 +396,11 @@ where
     DefaultAllocator: Allocator<ConstDimToSoDimT<DIM>>
         + Allocator<ConstDimToSoDimT<DIM>, ConstDimToSoDimT<DIM>>,
 {
-    let omega_vec = omega.0;
-    let total_inertia = &total_inertia.0;
-    let l_vec = total_inertia * omega_vec;
-    hlist![AngularMomentum(l_vec)]
+    hlist![AngularMomentum( &total_inertia.0 * omega.0 )]
+    // let omega_vec = omega.0;
+    // let total_inertia = &total_inertia.0;
+    // let l_vec = total_inertia * omega_vec;
+    // hlist![AngularMomentum(l_vec)]
 }
 
 /// 根据总角动量计算角速度（反对称矩阵形式）
@@ -521,6 +522,27 @@ where
     hlist![AngularKinetic( half * omega_vec.dot(&i_omega) )]
 }
 
+/// 从角动量与转动惯量计算转动动能。
+/// 公式：E = 1/2 · Lᵀ · I⁻¹ · L
+/// 若 I 奇异（刚体在该方向无惯性），返回 None。
+pub fn angular_kinetic_from_inertia_agm<Num: RealField + Copy, const DIM: usize>(
+    hlist_pat![inertia,momentum]:
+    HList!(&AngularInertia<Num, DIM>,&AngularMomentum<Num, DIM>)
+) -> Option<HList!(AngularKinetic<Num>)>
+where
+    Const<DIM>: DimToSoDim + DimName,
+    DefaultAllocator: AllocatorVM<ConstDimToSoDimT<DIM>>,
+    ConstDimToSoDimT<DIM>:DimSquare,
+{
+    let l = &momentum.0;
+    let decomp = LU::new(inertia.0.clone());
+    // I⁻¹ · L
+    let inv_l = decomp.solve(l)?;
+    let half = (Num::one()+Num::one()).recip();
+    Some(hlist![AngularKinetic(half * l.dot(&inv_l))])
+    // Some(half * l.dot(&inv_l))
+}
+
 pub fn angular_momentum_from_momentum_pos<Num: RealField + Copy, const DIM: usize>(
     r: &Pos<Num, DIM>,
     momentum: &Momentum<Num, DIM>,
@@ -537,6 +559,15 @@ where Const<DIM>:DimToSoDim,DefaultAllocator:Allocator<ConstDimToSoDimT<DIM>>
             }
         )
     )
+}
+
+pub fn velocity_from_angular_vel_pos<Num:RealField+Copy,const DIM:usize>(
+    p:&Pos<Num, DIM>,
+    agv:&AngularVel<Num,DIM>
+) -> Vel<Num, DIM>
+where Const<DIM>:DimSquareSo,DefaultAllocator:Allocator<ConstDimToSoDimT<DIM>>
+{
+    Vel(so_vec_to_mat(&agv.0) * p.0)
 }
 
 pub fn rotation_transform<Num:RealField+Copy,const DIM:usize>(
