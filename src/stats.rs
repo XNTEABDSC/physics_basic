@@ -8,13 +8,13 @@ use derive_more::{Add,AddAssign,Sub,SubAssign,Neg};
 
 use crate::derive_zero;
 
-#[derive(Clone, Copy, Debug, Add, AddAssign, Sub, SubAssign, Neg)]
+#[derive(Clone, Copy, Debug, Add, AddAssign, Sub, SubAssign, Neg, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Mass<Num>(pub Num);
 
 derive_zero!(Mass);
 
 /// Time pass of this object for this iteration of simulation
-#[derive(Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
+#[derive(Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TimePass<Num>(pub Num);
 
 derive_zero!(TimePass);
@@ -41,20 +41,20 @@ impl<Num,const DIM:usize> Zero for $type <Num,DIM>
 	}
 }
 
-impl<Num: RealField, const DIM: usize> std::ops::Neg for $type <Num, DIM> {
-    type Output=Self;
+// impl<Num: RealField, const DIM: usize> std::ops::Neg for $type <Num, DIM> {
+//     type Output=Self;
 
-	fn neg(self) -> Self::Output {
-		Self(self.0.neg())
-	}
-}
+// 	fn neg(self) -> Self::Output {
+// 		Self(self.0.neg())
+// 	}
+// }
     };
 }
 
 
 //derive_add_traits!{Mass}
 
-#[derive(Clone, Debug, Add, AddAssign, Sub, SubAssign)]
+#[derive(Clone, Debug, Add, AddAssign, Sub, SubAssign, Neg, PartialEq, Eq)]
 pub struct Pos<Num,const DIM:usize>(pub OVector<Num,Const<DIM>>)
 where Num:RealField,DefaultAllocator:Allocator<Const<DIM>>;
 
@@ -71,7 +71,7 @@ derive_for_s_vector!{Pos}
 //derive_add_traits!(Pos<3>);
 //derive_add_traits!(Pos<4>);
 
-#[derive(Clone, Debug, Add, AddAssign, Sub, SubAssign)]
+#[derive(Clone, Debug, Add, AddAssign, Sub, SubAssign, Neg, PartialEq, Eq)]
 pub struct Vel<Num,const DIM:usize>(pub OVector<Num,Const<DIM>>)
 where Num:RealField,DefaultAllocator:Allocator<Const<DIM>>;
 
@@ -85,7 +85,7 @@ derive_for_s_vector!{Vel}
 //derive_add_traits!(Vel);
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DirVec<Num,const DIM:usize>(pub OVector<Num,Const<DIM>>)
 where Num:RealField,DefaultAllocator:Allocator<Const<DIM>>;
 
@@ -111,7 +111,7 @@ pub struct Agv<const DIM:usize>(pub CMatrix<Num,DIM,DIM>);
 
  */
 
-#[derive(Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
+#[derive(Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg, PartialEq, Eq, PartialOrd)]
 pub struct Energy<Num>(pub Num);
 
 derive_zero!(Energy);
@@ -120,7 +120,7 @@ derive_zero!(Energy);
 //derive_add_traits!(Energy);
 
 
-#[derive(Clone, Debug, Add, AddAssign, Sub, SubAssign)]
+#[derive(Clone, Debug, Add, AddAssign, Sub, SubAssign,Neg, PartialEq, Eq)]
 pub struct Momentum<Num,const DIM:usize>(pub OVector<Num,Const<DIM>>)
 where Num:RealField,DefaultAllocator:Allocator<Const<DIM>>;
 
@@ -134,7 +134,7 @@ derive_for_s_vector!{Momentum}
 
 //derive_add_traits!(Momentum);
 
-#[derive(Clone, Copy, Debug,Add,AddAssign,Sub,SubAssign,Neg)]
+#[derive(Clone, Copy, Debug,Add,AddAssign,Sub,SubAssign,Neg, PartialEq, Eq, PartialOrd)]
 pub struct Kinetic<Num>(pub Num);
 
 derive_zero!(Kinetic);
@@ -154,12 +154,12 @@ pub fn mass_vel_2_kinetic<Num:RealField+Copy,const DIM:usize>(hlist_pat![mass,ve
 	]
 }
 
-#[derive(Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg)]
+#[derive(Clone,Copy,Debug,Add,AddAssign,Sub,SubAssign,Neg, PartialEq, Eq, PartialOrd)]
 pub struct Volume<Num>(pub Num);
 
 derive_zero!(Volume);
 
-#[derive(Default, Clone, Copy, Debug)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]
 pub struct Density<Num>(pub Num);
 
 //derive_add_traits!(Kinetic);
