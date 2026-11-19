@@ -1,12 +1,11 @@
 pub mod convex_polyhedron;
 
-use std::array;
+use std::{array, ops::{Deref, Index}};
 
 use nalgebra::{Const, RealField, SMatrix, SVector};
 use wacky_bag::utils::{d_sphere_volume::d_sphere_volume_by_radius_pow, factorial::factorial};
 
 use crate::{rotation::DimSquare, stats::Volume};
-
 
 #[derive(Default, Clone, Copy, Debug)]
 pub struct ShapeSphere<Num:RealField,const DIM:usize>{
@@ -28,21 +27,73 @@ impl<Num:RealField+Copy+num_traits::Num,const DIM:usize> ShapeSphere<Num,DIM> {
 	pub fn volume(&self)->Volume<Num>{Volume(self.volume)}
 }
 
-#[derive(Debug)]
-pub struct ShapeSurface<Num:RealField,const DIM:usize>{
+#[derive(Debug,Clone)]
+pub struct SurfaceStruct<Num:RealField,const DIM:usize>{
 	pub vertexes_index:[usize;DIM],
 	pub edge_vector:SVector<Num,DIM>,
     pub normal_vector:SVector<Num,DIM>,
     pub area:Num,
 	pub center:SVector<Num,DIM>
 }
-#[derive(Debug)]
-pub struct ShapePoly<Num:RealField,const DIM:usize>{
+#[derive(Debug,Clone)]
+pub struct ShapeStruct<Num:RealField,const DIM:usize>{
 	pub vertexes:Vec<SVector<Num,DIM>>,
-	pub surfaces:Vec<ShapeSurface<Num,DIM>>,
+	pub surfaces:Vec<SurfaceStruct<Num,DIM>>,
 	pub volume:Num
 }
 
+pub trait Shape<Num,const DIM:usize> {
+    // type Num;
+    // const DIM:usize;
+    fn surfaces(&self)->impl Iterator<Item : Deref<Target : Surface<Num,DIM>>>;
+    fn vertexes(&self)->impl Deref<Target : Index<usize,Output = SVector<Num,DIM>>>;
+    fn volume(&self)->impl Deref<Target = Num>;
+}
+
+impl<Num:RealField,const DIM:usize> Shape<Num,DIM> for ShapeStruct<Num,DIM>  {
+    fn surfaces(&self)->impl Iterator<Item : Deref<Target : Surface<Num,DIM>>> {
+        self.surfaces.iter()
+    }
+
+    fn vertexes(&self)->impl Deref<Target : Index<usize,Output = SVector<Num,DIM>>> {
+        &self.vertexes
+    }
+
+    fn volume(&self)->impl Deref<Target = Num> {
+        &self.volume
+    }
+}
+
+pub trait Surface<Num,const DIM:usize> {
+    
+	fn vertexes_index(&self)->impl Deref<Target = [usize;DIM]>;
+	fn edge_vector(&self)->impl Deref<Target = SVector<Num,DIM>>;
+    fn normal_vector(&self)->impl Deref<Target = SVector<Num,DIM>>;
+    fn area(&self)->impl Deref<Target = Num>;
+	fn center(&self)->impl Deref<Target = SVector<Num,DIM>>;
+}
+
+impl<Num:RealField,const DIM:usize> Surface<Num,DIM> for SurfaceStruct<Num,DIM>  {
+    fn vertexes_index(&self)->impl Deref<Target = [usize;DIM]> {
+        &self.vertexes_index
+    }
+
+    fn edge_vector(&self)->impl Deref<Target = SVector<Num,DIM>> {
+        &self.edge_vector
+    }
+
+    fn normal_vector(&self)->impl Deref<Target = SVector<Num,DIM>> {
+        &self.normal_vector
+    }
+
+    fn area(&self)->impl Deref<Target = Num> {
+        &self.area
+    }
+
+    fn center(&self)->impl Deref<Target = SVector<Num,DIM>> {
+        &self.center
+    }
+}
 /// 计算一个面的“未归一化”法向量。
 /// DIM=3 时就是三角形叉积；
 /// DIM=2 时就是线段的垂直向量；
@@ -100,7 +151,7 @@ pub fn surface_center<Num: RealField, const DIM: usize>(
 	a.column_sum().scale(Num::one()/Num::from_isize(DIM as isize).unwrap())
 }
 
-impl<Num:RealField,const DIM:usize> ShapeSurface<Num,DIM> {
+impl<Num:RealField,const DIM:usize> SurfaceStruct<Num,DIM> {
 	pub fn new(vertexes:&[SVector<Num,DIM>],edge:[usize;DIM])->Self{
 		let edge_vector=generalized_cross(edge.iter().map(|i|vertexes[*i].clone()));
 		let center=surface_center(vertexes,&edge);
@@ -114,18 +165,18 @@ impl<Num:RealField,const DIM:usize> ShapeSurface<Num,DIM> {
 	}
 }
 
-impl<Num:RealField,const DIM:usize> ShapePoly<Num,DIM>
+impl<Num:RealField,const DIM:usize> ShapeStruct<Num,DIM>
 where Const<DIM>:DimSquare
 {
 	pub fn new(vertexes:Vec<SVector<Num,DIM>>,edges:Vec<[usize;DIM]>)->Self{
-		let surfaces=edges.into_iter().map(|e|ShapeSurface::new(&vertexes,e)).collect::<Vec<_>>();
+		let surfaces=edges.into_iter().map(|e|SurfaceStruct::new(&vertexes,e)).collect::<Vec<_>>();
 		Self{
 			volume:Self::volume(&vertexes,&surfaces),
 			vertexes,
 			surfaces,
 		}
 	}
-	fn volume(vertexes:&[SVector<Num,DIM>],edges:&[ShapeSurface<Num,DIM>]) -> Num 
+	fn volume(vertexes:&[SVector<Num,DIM>],edges:&[SurfaceStruct<Num,DIM>]) -> Num 
 	where Const<DIM>:DimSquare
 	{
         let mut sum = Num::zero();
@@ -157,7 +208,7 @@ where Const<DIM>:DimSquare
 		center: SVector<Num, DIM>,
 		radius: Num,
 		segments: usize,
-	) -> ShapePoly<Num, DIM> {
+	) -> ShapeStruct<Num, DIM> {
 		assert!(DIM >= 2, "DIM must be >= 2");
 		assert!(segments >= 1, "segments must be >= 1");
 
@@ -262,7 +313,7 @@ where Const<DIM>:DimSquare
 			}
 		}
 
-		return ShapePoly::new(vertexes, faces);
+		return ShapeStruct::new(vertexes, faces);
 	}
 
 	
@@ -462,7 +513,7 @@ use nalgebra::{Vector2, Vector3, Vector4};
         //     vertexes_index: vec![[0, 1]],
         //     normal_vector: Vector2::zeros(),
         // };
-		let face =ShapeSurface::<f64,2>::new(&vs,[0,1]);
+		let face =SurfaceStruct::<f64,2>::new(&vs,[0,1]);
         let n = face.edge_vector.clone().normalize();
         assert!(approx(n.norm(), 1.0));
     }
@@ -475,7 +526,7 @@ use nalgebra::{Vector2, Vector3, Vector4};
             Vector3::new(1.0, 0.0, 0.0),
             Vector3::new(0.0, 1.0, 0.0),
         ];
-		let face = ShapeSurface::<f64,3>::new(&vs,[0,1,2]);
+		let face = SurfaceStruct::<f64,3>::new(&vs,[0,1,2]);
 
         let _inside = Vector3::new(0.3, 0.3, -1.0);
         let n = face.edge_vector.clone().normalize();
@@ -485,7 +536,7 @@ use nalgebra::{Vector2, Vector3, Vector4};
     #[test]
     fn test_shape_face_update_normal() {
         let vs = [Vector2::new(0.0_f64, 0.0), Vector2::new(1.0, 0.0)];
-		let face = ShapeSurface::<f64,2>::new(&vs,[0,1]);
+		let face = SurfaceStruct::<f64,2>::new(&vs,[0,1]);
         assert!(approx(face.edge_vector.norm(), 1.0));
     }
 
@@ -505,7 +556,7 @@ use nalgebra::{Vector2, Vector3, Vector4};
         //     faces: vec![[0, 1], [1, 2], [2, 3], [3, 0]],
         //     volume: 0.0,
         // };
-		let poly = ShapePoly::<f64, 2>::new(
+		let poly = ShapeStruct::<f64, 2>::new(
             vec![
                 Vector2::new(0.0, 0.0),
                 Vector2::new(1.0, 0.0),
@@ -528,7 +579,7 @@ use nalgebra::{Vector2, Vector3, Vector4};
         //     faces: vec![[0, 1], [1, 2], [2, 0]],
         //     volume: 0.0,
         // };
-		let poly = ShapePoly::<f64, 2>::new(
+		let poly = ShapeStruct::<f64, 2>::new(
 			vec![
 				Vector2::new(0.0, 0.0),
 				Vector2::new(1.0, 0.0),
@@ -557,7 +608,7 @@ use nalgebra::{Vector2, Vector3, Vector4};
         //     ],
         //     volume: 0.0,
         // };
-		let poly = ShapePoly::<f64, 3>::new(
+		let poly = ShapeStruct::<f64, 3>::new(
 			vec![
 				Vector3::new(0.0, 0.0, 0.0),
 				Vector3::new(1.0, 0.0, 0.0),
@@ -594,7 +645,7 @@ use nalgebra::{Vector2, Vector3, Vector4};
         //     volume: 0.0,
         // };
 
-		let poly = ShapePoly::<f64, 3>::new(
+		let poly = ShapeStruct::<f64, 3>::new(
 			vec![
 				Vector3::new(0.0, 0.0, 0.0) + t,
 				Vector3::new(1.0, 0.0, 0.0) + t,
@@ -625,7 +676,7 @@ use nalgebra::{Vector2, Vector3, Vector4};
         //     volume: 0.0,
         // };
 
-		let poly=ShapePoly::<f64,2>::new(
+		let poly=ShapeStruct::<f64,2>::new(
 
 			vec![
 				Vector2::new(0.0, 0.0),
@@ -645,7 +696,7 @@ use nalgebra::{Vector2, Vector3, Vector4};
 
     #[test]
     fn test_from_ball_2d_seg1() {
-        let poly = ShapePoly::from_ball_grid(Vector2::new(0.0_f64, 0.0), 1.0, 1);
+        let poly = ShapeStruct::from_ball_grid(Vector2::new(0.0_f64, 0.0), 1.0, 1);
         assert_eq!(poly.vertexes.len(), 4);
         assert_eq!(poly.surfaces.len(), 4);
         for v in &poly.vertexes {
@@ -657,13 +708,13 @@ use nalgebra::{Vector2, Vector3, Vector4};
 
     #[test]
     fn test_from_ball_2d_converges_to_pi() {
-        let poly = ShapePoly::from_ball_grid(Vector2::new(0.0_f64, 0.0), 1.0, 64);
+        let poly = ShapeStruct::from_ball_grid(Vector2::new(0.0_f64, 0.0), 1.0, 64);
         assert!((poly.volume - std::f64::consts::PI).abs() < 0.05);
     }
 
     #[test]
     fn test_from_ball_3d_seg1() {
-        let poly = ShapePoly::from_ball_grid(Vector3::new(0.0_f64, 0.0, 0.0), 1.0, 1);
+        let poly = ShapeStruct::from_ball_grid(Vector3::new(0.0_f64, 0.0, 0.0), 1.0, 1);
         assert_eq!(poly.vertexes.len(), 8);
         assert_eq!(poly.surfaces.len(), 12);
         for v in &poly.vertexes {
@@ -681,7 +732,7 @@ use nalgebra::{Vector2, Vector3, Vector4};
 
     #[test]
     fn test_from_ball_3d_converges() {
-        let poly = ShapePoly::from_ball_grid(Vector3::new(0.0_f64, 0.0, 0.0), 1.0, 8);
+        let poly = ShapeStruct::from_ball_grid(Vector3::new(0.0_f64, 0.0, 0.0), 1.0, 8);
         let sphere_vol = 4.0 / 3.0 * std::f64::consts::PI;
         // 内接多面体体积严格小于球体积
         assert!(poly.volume < sphere_vol);
@@ -696,7 +747,7 @@ use nalgebra::{Vector2, Vector3, Vector4};
 
     #[test]
     fn test_from_ball_4d_seg1() {
-        let poly = ShapePoly::from_ball_grid(Vector4::new(0.0_f64, 0.0, 0.0, 0.0), 1.0, 1);
+        let poly = ShapeStruct::from_ball_grid(Vector4::new(0.0_f64, 0.0, 0.0, 0.0), 1.0, 1);
         assert_eq!(poly.vertexes.len(), 16);
         // 8 个 3-cube 面 × 3! = 6 个四面体 = 48
         assert_eq!(poly.surfaces.len(), 48);
@@ -721,8 +772,8 @@ use nalgebra::{Vector2, Vector3, Vector4};
 
     #[test]
     fn test_from_ball_translation_invariance() {
-        let p1 = ShapePoly::from_ball_grid(Vector3::new(0.0_f64, 0.0, 0.0), 1.0, 3);
-        let p2 = ShapePoly::from_ball_grid(Vector3::new(10.0, -5.0, 20.0), 1.0, 3);
+        let p1 = ShapeStruct::from_ball_grid(Vector3::new(0.0_f64, 0.0, 0.0), 1.0, 3);
+        let p2 = ShapeStruct::from_ball_grid(Vector3::new(10.0, -5.0, 20.0), 1.0, 3);
         assert!(approx_tol(p1.volume, p2.volume, 1e-9));
     }
 
@@ -733,7 +784,7 @@ use nalgebra::{Vector2, Vector3, Vector4};
     #[test]
     fn test_from_ball_all_faces_outward_2d() {
         let center = Vector2::new(0.0_f64, 0.0);
-        let poly = ShapePoly::from_ball_grid(center, 1.0, 4);
+        let poly = ShapeStruct::from_ball_grid(center, 1.0, 4);
         for face in &poly.surfaces {
             let mut fc = Vector2::zeros();
             for i in face.vertexes_index {
@@ -753,7 +804,7 @@ use nalgebra::{Vector2, Vector3, Vector4};
     #[test]
     fn test_from_ball_all_faces_outward_3d() {
         let center = Vector3::new(0.0_f64, 0.0, 0.0);
-        let poly = ShapePoly::from_ball_grid(center, 1.0, 2);
+        let poly = ShapeStruct::from_ball_grid(center, 1.0, 2);
         for face in &poly.surfaces {
             let mut fc = Vector3::zeros();
             for i in face.vertexes_index {
