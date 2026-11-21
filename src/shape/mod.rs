@@ -1,11 +1,11 @@
 pub mod convex_polyhedron;
 
-use std::{array, ops::{Deref, Index}};
+use std::{array, ops::{Deref, Index}, process::Output};
 
 use nalgebra::{Const, RealField, SMatrix, SVector};
-use wacky_bag::utils::{d_sphere_volume::d_sphere_volume_by_radius_pow, factorial::factorial};
-
-use crate::{rotation::DimSquare, stats::Volume};
+use wacky_bag::{traits::as_iter::AsIterator, utils::{d_sphere_volume::d_sphere_volume_by_radius_pow, factorial::factorial}};
+use crate::dimension::*;
+use crate::{stats::Volume};
 
 #[derive(Default, Clone, Copy, Debug)]
 pub struct ShapeSphere<Num:RealField,const DIM:usize>{
@@ -45,14 +45,20 @@ pub struct ShapeStruct<Num:RealField,const DIM:usize>{
 pub trait Shape<Num,const DIM:usize> {
     // type Num;
     // const DIM:usize;
-    fn surfaces(&self)->impl Iterator<Item : Deref<Target : Surface<Num,DIM>>>;
+
+    type Surface:Surface<Num,DIM>;
+    type SurfaceCollection:Index<usize,Output = Self::Surface>+for<'a> AsIterator< Item<'a> =&'a Self::Surface>;
+    
+    fn surfaces(&self)->impl Deref<Target = Self::SurfaceCollection>;
     fn vertexes(&self)->impl Deref<Target : Index<usize,Output = SVector<Num,DIM>>>;
     fn volume(&self)->impl Deref<Target = Num>;
 }
 
 impl<Num:RealField,const DIM:usize> Shape<Num,DIM> for ShapeStruct<Num,DIM>  {
-    fn surfaces(&self)->impl Iterator<Item : Deref<Target : Surface<Num,DIM>>> {
-        self.surfaces.iter()
+
+    fn surfaces(&self)->impl Deref<Target=Self::SurfaceCollection>
+    {
+        &self.surfaces
     }
 
     fn vertexes(&self)->impl Deref<Target : Index<usize,Output = SVector<Num,DIM>>> {
@@ -62,6 +68,11 @@ impl<Num:RealField,const DIM:usize> Shape<Num,DIM> for ShapeStruct<Num,DIM>  {
     fn volume(&self)->impl Deref<Target = Num> {
         &self.volume
     }
+    
+    type Surface=SurfaceStruct<Num,DIM>;
+    
+    type SurfaceCollection=Vec<SurfaceStruct<Num, DIM>>;
+    
 }
 
 pub trait Surface<Num,const DIM:usize> {
@@ -165,34 +176,36 @@ impl<Num:RealField,const DIM:usize> SurfaceStruct<Num,DIM> {
 	}
 }
 
+pub fn volume<'a,Num:RealField,const DIM:usize>(vertexes:&'a [SVector<Num,DIM>],edges:impl IntoIterator<Item = &'a [usize;DIM]>) -> Num 
+where Const<DIM>:DimSquare
+{
+    let mut sum = Num::zero();
+
+    for edges in edges {
+        let mat = SMatrix::<Num, DIM, DIM>::from_fn(|r, c| {
+            vertexes[edges[r]][c].clone()
+        });
+
+        sum += mat.determinant();
+    }
+
+    let fact = Num::from_usize(factorial(DIM).unwrap()).unwrap();
+
+    (sum / fact).abs()
+}
+
 impl<Num:RealField,const DIM:usize> ShapeStruct<Num,DIM>
 where Const<DIM>:DimSquare
 {
 	pub fn new(vertexes:Vec<SVector<Num,DIM>>,edges:Vec<[usize;DIM]>)->Self{
 		let surfaces=edges.into_iter().map(|e|SurfaceStruct::new(&vertexes,e)).collect::<Vec<_>>();
 		Self{
-			volume:Self::volume(&vertexes,&surfaces),
+			volume:volume(&vertexes,surfaces.iter().map(|a|&a.vertexes_index)),
 			vertexes,
 			surfaces,
 		}
 	}
-	fn volume(vertexes:&[SVector<Num,DIM>],edges:&[SurfaceStruct<Num,DIM>]) -> Num 
-	where Const<DIM>:DimSquare
-	{
-        let mut sum = Num::zero();
-
-        for edges in edges {
-            let mat = SMatrix::<Num, DIM, DIM>::from_fn(|r, c| {
-                vertexes[edges.vertexes_index[r]][c].clone()
-            });
-
-            sum += mat.determinant();
-        }
-
-        let fact = Num::from_usize(factorial(DIM).unwrap()).unwrap();
-
-        (sum / fact).abs()
-    }
+	
 
 	/// 生成 N 维球体的多面体近似。
 	///
@@ -341,7 +354,7 @@ fn permute_rec(arr: &mut Vec<usize>, k: usize, out: &mut Vec<Vec<usize>>) {
 #[cfg(test)]
 mod tests_shape {
     use super::*;
-use nalgebra::{Vector2, Vector3, Vector4};
+    use nalgebra::{Vector2, Vector3, Vector4};
 
     const EPS: f64 = 1e-9;
     const EPS_LOOSE: f64 = 1e-6;

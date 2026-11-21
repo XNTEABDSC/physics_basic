@@ -1,40 +1,68 @@
 use approx::AbsDiffEq;
-use nalgebra::{Const, RealField, SVector};
+use nalgebra::{Const, DefaultAllocator, OMatrix, OVector, RealField, SVector};
 use wacky_bag::utils::fn_as_index::FnAsIndex;
-use std::{array, collections::HashSet, ops::{ControlFlow::Continue, Index, IndexMut}, path::Iter};
+use std::{array, collections::HashSet, ops::{ControlFlow::Continue, Deref, Index, IndexMut}, path::Iter};
 
-use crate::{rotation::DimSquare, shape::ShapeStruct};
-
+use crate::{shape::{self, ShapeStruct, generalized_cross, surface_center, volume}};
+use crate::dimension::*;
 /// 泛型凸多面体：由顶点和一组 (DIM-1) 维面构成。
 /// 每个面是 DIM 个顶点确定的单纯形，`normal` 为外向单位法线，
 /// `offset` 满足 `normal · x = offset` 对该面上所有点成立。
 #[derive(Debug, Clone)]
 pub struct ConvexPolyhedron<Num: RealField + Copy, const DIM: usize> {
-    pub vertexes: Vec<SVector<Num, DIM>>,
-    pub surfaces: Vec<Face<Num, DIM>>,
+    vertexes: Vec<SVector<Num, DIM>>,
+    surfaces: Vec<Surface<Num, DIM>>,
+
+    volume:Num
 }
 
 #[derive(Debug, Clone)]
-pub struct Face<Num: RealField + Copy, const DIM: usize> {
+pub struct Surface<Num: RealField + Copy, const DIM: usize> {
     /// 该面的 DIM 个顶点索引。
-    pub indices: [usize; DIM],
+    indices: [usize; DIM],
     /// 外向单位法线。
-    pub normal: SVector<Num, DIM>,
+    normal_vector: SVector<Num, DIM>,
     /// 平面偏移：normal · x = offset。
-    pub offset: Num,
+    offset: Num,
     /// 该面当前关联的外部点集合（仅 Quickhull 内部使用）。
-    pub outside: Vec<usize>,
+    outside: Vec<usize>,
+
+    /// 面向量，方向为法向量，长度为面积
+	edge_vector:SVector<Num,DIM>,
+    area:Num,
+	center:SVector<Num,DIM>
 }
 
-impl<Num: RealField + Copy, const DIM: usize> Face<Num, DIM> {
+impl<Num: RealField + Copy, const DIM: usize> Surface<Num, DIM> {
     fn signed_distance(&self, point: &SVector<Num, DIM>) -> Num {
-        self.normal.dot(point) - self.offset
+        self.normal_vector.dot(point) - self.offset
+    }
+
+    fn new(
+        mut indices:[usize; DIM],
+        vertexes: &[SVector<Num, DIM>],
+        interior: &SVector<Num, DIM>,
+    )->Self{
+        let (edge_vector, normal_vector,offset) = make_outward_face(&mut indices,vertexes, interior);
+        Surface {
+            indices,
+            normal_vector: normal_vector,
+            offset,
+            outside: Vec::new(),
+
+            area: edge_vector.magnitude(),
+            edge_vector: edge_vector,
+
+            center:surface_center(vertexes,&indices)
+        }
     }
 }
 
-impl<Num: RealField + Copy, const DIM: usize> ConvexPolyhedron<Num, DIM> {
+impl<Num: RealField + Copy, const DIM: usize> ConvexPolyhedron<Num, DIM> 
+where Const<DIM>:DimSquare
+{
     /// 从任意点集计算凸包。点数不足以构成 DIM 维单纯形时返回 `None`。
-    pub fn quickhull(points: impl IntoIterator<Item = SVector<Num, DIM>>) -> Option<Self> {
+    pub fn new(points: impl IntoIterator<Item = SVector<Num, DIM>>) -> Option<Self> {
         assert!(DIM >= 2, "DIM 必须 >= 2");
 
         // 1. 去重
@@ -55,6 +83,8 @@ impl<Num: RealField + Copy, const DIM: usize> ConvexPolyhedron<Num, DIM> {
         let mut hull = Self {
             vertexes: unique,
             surfaces: Vec::new(),
+
+            volume:Num::zero()
         };
         hull.build_initial_faces(&simplex);
 
@@ -129,6 +159,8 @@ impl<Num: RealField + Copy, const DIM: usize> ConvexPolyhedron<Num, DIM> {
 
         // 清理：移除没有顶点的面（理论上不会出现）
         hull.surfaces.retain(|f| f.indices.len() == DIM);
+
+        hull.volume=volume(&hull.vertexes, hull.surfaces.iter().map(|v|&v.indices));
         Some(hull)
     }
 
@@ -149,13 +181,17 @@ impl<Num: RealField + Copy, const DIM: usize> ConvexPolyhedron<Num, DIM> {
             }
             let mut indices = [0usize; DIM];
             indices.copy_from_slice(&idx);
-            let (normal,offset) = make_outward_face(&mut indices,&self.vertexes, &centroid);
-            self.surfaces.push(Face {
-                indices,
-                normal,
-                offset,
-                outside: Vec::new(),
-            });
+
+            let surface=Surface::new(indices, &self.vertexes, &centroid);
+            self.surfaces.push(surface);
+            // let (normal,offset) = make_outward_face(&mut indices,&self.vertexes, &centroid);
+            // let normal=normal.
+            // self.surfaces.push(Surface {
+            //     indices,
+            //     normal_vector: normal,
+            //     offset,
+            //     outside: Vec::new(),
+            // });
         }
     }
 
@@ -199,15 +235,18 @@ impl<Num: RealField + Copy, const DIM: usize> ConvexPolyhedron<Num, DIM> {
             for (i, &v) in sub.iter().enumerate() {
                 indices[i + 1] = v;
             }
+            
+            let surface=Surface::new(indices, &self.vertexes, &interior);
+            self.surfaces.push(surface);
             // let verts: [SVector<Num, DIM>; DIM] = indices.map(|i| self.points[i]);
-            let (normal,offset) = make_outward_face(&mut indices, &self.vertexes, &interior);
-            // let offset = normal.dot(&verts[0]);
-            self.surfaces.push(Face {
-                indices,
-                normal,
-                offset,
-                outside: Vec::new(),
-            });
+            // let (normal,offset) = make_outward_face(&mut indices, &self.vertexes, &interior);
+            // // let offset = normal.dot(&verts[0]);
+            // self.surfaces.push(Surface {
+            //     indices,
+            //     normal_vector: normal,
+            //     offset,
+            //     outside: Vec::new(),
+            // });
         }
     }
 
@@ -222,6 +261,290 @@ impl<Num: RealField + Copy, const DIM: usize> ConvexPolyhedron<Num, DIM> {
     {
         ShapeStruct::new(self.vertexes, self.surfaces.into_iter().map(|i|i.indices).collect())
     }
+
+
+    /// 数值容差，取机器精度的平方根，与标量类型精度相关。
+    fn eps() -> Num {
+        Num::default_epsilon().sqrt()
+    }
+
+    /// 判断点是否在凸多面体内部（含边界）。
+    pub fn contains_point(&self, p: &SVector<Num, DIM>) -> bool {
+        let e = Self::eps();
+        for s in &self.surfaces {
+            // 外向法线：内部满足 normal · x <= offset
+            if s.normal_vector.dot(p) - s.offset > e {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// 计算直线 origin + t * direction 与多面体的交集。
+    /// 返回相交线段的两个端点；若无交返回 None。
+    /// 若直线与多面体相切于一点，返回两个相同的点。
+    /// ```
+    /// let p0 = origin + direction * tmin;
+    /// let p1 = origin + direction * tmax;
+    /// ```
+    pub fn line_intersection(
+        &self,
+        origin: &SVector<Num, DIM>,
+        direction: &SVector<Num, DIM>,
+    ) -> Option<(Num,Num)> {
+        let e = Self::eps();
+
+        // 退化为点
+        if direction.norm_squared() < e * e {
+            return if self.contains_point(origin) {
+                Some((Num::zero(),Num::zero()))
+            } else {
+                None
+            };
+        }
+
+        let mut tmin: Option<Num> = None;
+        let mut tmax: Option<Num> = None;
+
+        for s in &self.surfaces {
+            // 约束：normal · (origin + t * direction) <= offset
+            // 即：t * (normal · direction) <= offset - normal · origin
+            let a = s.normal_vector.dot(direction);
+            let b = s.offset - s.normal_vector.dot(origin);
+
+            if a.abs() < e {
+                // 直线方向与该面平行
+                if b < -e {
+                    // 整条直线都在该面外侧
+                    return None;
+                }
+            } else {
+                let t = b / a;
+                if a > Num::zero() {
+                    // t <= t
+                    if tmax.map_or(true, |tm| t < tm) {
+                        tmax = Some(t);
+                    }
+                } else {
+                    // t >= t
+                    if tmin.map_or(true, |tm| t > tm) {
+                        tmin = Some(t);
+                    }
+                }
+            }
+        }
+
+        // 凸多面体有界，tmin / tmax 应均存在
+        let tmin = tmin?;
+        let tmax = tmax?;
+
+        if tmin > tmax {
+            // 允许相切数值误差
+            if tmin - tmax < e {
+                let t = (tmin + tmax) / Num::from_usize(2).unwrap();
+                // let p = origin + direction * t;
+                return Some((t, t));
+            }
+            return None;
+        }
+
+        // let p0 = origin + direction * tmin;
+        // let p1 = origin + direction * tmax;
+        Some((tmin, tmax))
+    }
+
+    /// 顶点质心（作为 GJK 初始方向）。
+    fn centroid(&self) -> SVector<Num, DIM> {
+        let mut c = SVector::<Num, DIM>::zeros();
+        if self.vertexes.is_empty() {
+            return c;
+        }
+        for v in &self.vertexes {
+            c += v;
+        }
+        c / Num::from_usize(self.vertexes.len()).unwrap()
+    }
+
+    /// 在给定方向上求支撑点（点积最大的顶点）。
+    fn support(&self, dir: &SVector<Num, DIM>) -> SVector<Num, DIM> {
+        let mut best = self.vertexes[0];
+        let mut best_dot = dir.dot(&best);
+        for v in &self.vertexes[1..] {
+            let d = dir.dot(v);
+            if d > best_dot {
+                best_dot = d;
+                best = *v;
+            }
+        }
+        best
+    }
+
+    /// 两个凸多面体是否相交（碰撞检测）。
+    /// 使用 GJK 判断 Minkowski 差 A - B 是否包含原点。
+    pub fn intersects(&self, other: &Self) -> bool 
+    where 
+        Const<DIM>:DimToDimAdd1,
+        DefaultAllocator:AllocatorVM<ConstDimToDimAdd1T<DIM>>,
+        ConstDimToDimAdd1T<DIM>:DimSquare
+    {
+        let e = Self::eps();
+
+        // 初始搜索方向
+        let mut dir = self.centroid() - other.centroid();
+        if dir.norm_squared() < e * e {
+            dir = SVector::<Num, DIM>::zeros();
+            dir[0] = Num::one();
+        }
+
+        // Minkowski 差 A - B 的支撑函数
+        let support_diff = |d: &SVector<Num, DIM>| -> SVector<Num, DIM> {
+            self.support(d) - other.support(&(-d))
+        };
+
+        let first = support_diff(&dir);
+        let mut simplex: Vec<SVector<Num, DIM>> = vec![first];
+        let mut v = -first; // 指向原点的方向
+
+        if v.norm_squared() < e * e {
+            return true; // 原点已在 Minkowski 差中
+        }
+
+        loop {
+            let w = support_diff(&v);
+
+            // w 不能使单纯形在 -v 方向上越过原点，则不相交
+            if v.dot(&w) < -e {
+                return false;
+            }
+
+            // 支撑点重复，无法继续推进
+            if simplex.iter().any(|p| (*p - w).norm_squared() < e * e) {
+                let (cp, _) = Self::closest_point_on_simplex(&simplex);
+                return cp.norm_squared() < e * e;
+            }
+
+            simplex.push(w);
+            let (cp, subset) = Self::closest_point_on_simplex(&simplex);
+
+            if cp.norm_squared() < e * e {
+                return true; // 原点在单纯形内 ⇒ Minkowski 差包含原点
+            }
+
+            // 缩减单纯形到包含最近点的最小面
+            let mut new_simplex = Vec::with_capacity(subset.len());
+            for &i in &subset {
+                new_simplex.push(simplex[i]);
+            }
+            simplex = new_simplex;
+            v = -cp;
+        }
+    }
+
+    /// 求一组点（单纯形）的凸包上离原点最近的点，并返回其支撑子集。
+    /// 枚举所有非空子集，对每个子集解最小二乘问题：
+    ///   min ||Σ λ_i p_i||²  s.t.  Σ λ_i = 1
+    /// 取满足 λ_i ≥ 0 且范数最小的解。
+    fn closest_point_on_simplex(
+        points: &[SVector<Num, DIM>],
+    ) -> (SVector<Num, DIM>, Vec<usize>) 
+    where 
+        Const<DIM>:DimToDimAdd1,
+        DefaultAllocator:AllocatorVM<ConstDimToDimAdd1T<DIM>>,
+        ConstDimToDimAdd1T<DIM>:DimSquare
+    {
+        let e = Self::eps();
+        let n = points.len();
+        let mut best_norm2: Option<Num> = None;
+        let mut best_point = SVector::<Num, DIM>::zeros();
+        let mut best_subset: Vec<usize> = vec![];
+
+        // 枚举所有非空子集
+        for mask in 1..(1usize << n) {
+            let subset: Vec<usize> = (0..n).filter(|i| mask & (1 << i) != 0).collect();
+            let k = subset.len();
+
+            // 构造 KKT 系统：
+            // [ G  1 ] [λ]   [0]
+            // [ 1ᵀ 0 ] [μ] = [1]
+            // 其中 G_{ij} = p_i · p_j
+            let mut mat = OMatrix::<Num,ConstDimToDimAdd1T<DIM>,ConstDimToDimAdd1T<DIM>>::zeros();
+            for i in 0..k {
+                for j in 0..k {
+                    mat[(i, j)] = points[subset[i]].dot(&points[subset[j]]);
+                }
+                mat[(i, k)] = Num::one();
+                mat[(k, i)] = Num::one();
+            }
+            let mut rhs = OVector::<Num,ConstDimToDimAdd1T<DIM>>::zeros();
+            rhs[k] = Num::one();
+
+            if let Some(sol) = mat.lu().solve(&rhs) {
+                // 检查重心坐标非负
+                let mut ok = true;
+                for i in 0..k {
+                    if sol[i] < -e {
+                        ok = false;
+                        break;
+                    }
+                }
+                if ok {
+                    let mut pt = SVector::<Num, DIM>::zeros();
+                    for i in 0..k {
+                        pt += points[subset[i]] * sol[i];
+                    }
+                    let norm2 = pt.norm_squared();
+                    if best_norm2.map_or(true, |b| norm2 < b) {
+                        best_norm2 = Some(norm2);
+                        best_point = pt;
+                        best_subset = subset;
+                    }
+                }
+            }
+        }
+
+        (best_point, best_subset)
+    }
+}
+
+impl<Num: RealField + Copy, const DIM: usize> shape::Surface<Num,DIM> for  Surface<Num, DIM>  {
+    fn vertexes_index(&self)->impl std::ops::Deref<Target = [usize;DIM]> {
+        &self.indices
+    }
+
+    fn edge_vector(&self)->impl std::ops::Deref<Target = SVector<Num,DIM>> {
+        &self.edge_vector
+    }
+
+    fn normal_vector(&self)->impl std::ops::Deref<Target = SVector<Num,DIM>> {
+        &self.normal_vector
+    }
+
+    fn area(&self)->impl std::ops::Deref<Target = Num> {
+        &self.area
+    }
+
+    fn center(&self)->impl std::ops::Deref<Target = SVector<Num,DIM>> {
+        &self.center
+    }
+}
+
+impl<Num: RealField + Copy, const DIM: usize> shape::Shape<Num,DIM> for ConvexPolyhedron<Num,DIM>  {
+    fn surfaces(&self)->impl
+    Deref<Target =Self::SurfaceCollection> {
+        &self.surfaces
+    }
+
+    fn vertexes(&self)->impl std::ops::Deref<Target : Index<usize,Output = SVector<Num,DIM>>> {
+        &self.vertexes
+    }
+
+    fn volume(&self)->impl std::ops::Deref<Target = Num> {
+        &self.volume
+    }
+    
+    type Surface=Surface<Num,DIM>;
+    
+    type SurfaceCollection=Vec<Surface<Num, DIM>>;
 }
 
 struct ArrayChain<T,const N1:usize,const N2:usize>(pub [T;N1],pub [T;N2]);
@@ -339,30 +662,31 @@ fn face_normal<Num: RealField + Copy, const DIM: usize>(
 ) -> SVector<Num, DIM> {
     assert_eq!(verts.len(), DIM);
 
-    // 构建 DIM-1 个差分向量
-    let mut diffs = Vec::with_capacity(DIM - 1);
-    for i in 1..DIM {
-        diffs.push(verts[i] - verts[0]);
-    }
+    let mut normal=generalized_cross(verts.clone());
+    // // 构建 DIM-1 个差分向量
+    // let mut diffs = Vec::with_capacity(DIM - 1);
+    // for i in 1..DIM {
+    //     diffs.push(verts[i] - verts[0]);
+    // }
 
-    // 在 DIM 维中，DIM-1 个向量的法线可通过广义叉积得到：
-    // normal_j = (-1)^j * det(矩阵去掉第 j 列)
-    let mut normal: nalgebra::Matrix<Num, nalgebra::Const<DIM>, nalgebra::Const<1>, nalgebra::ArrayStorage<Num, DIM, 1>> = SVector::zeros();
-    for j in 0..DIM {
-        let mut sub = nalgebra::DMatrix::<Num>::zeros(DIM - 1, DIM - 1);
-        let mut col = 0;
-        for jj in 0..DIM {
-            if jj == j {
-                continue;
-            }
-            for i in 0..DIM - 1 {
-                sub[(i, col)] = diffs[i][jj];
-            }
-            col += 1;
-        }
-        let det = sub.determinant();
-        normal[j] = if j % 2 == 0 { det } else { -det };
-    }
+    // // 在 DIM 维中，DIM-1 个向量的法线可通过广义叉积得到：
+    // // normal_j = (-1)^j * det(矩阵去掉第 j 列)
+    // let mut normal: nalgebra::Matrix<Num, nalgebra::Const<DIM>, nalgebra::Const<1>, nalgebra::ArrayStorage<Num, DIM, 1>> = SVector::zeros();
+    // for j in 0..DIM {
+    //     let mut sub = nalgebra::DMatrix::<Num>::zeros(DIM - 1, DIM - 1);
+    //     let mut col = 0;
+    //     for jj in 0..DIM {
+    //         if jj == j {
+    //             continue;
+    //         }
+    //         for i in 0..DIM - 1 {
+    //             sub[(i, col)] = diffs[i][jj];
+    //         }
+    //         col += 1;
+    //     }
+    //     let det = sub.determinant();
+    //     normal[j] = if j % 2 == 0 { det } else { -det };
+    // }
 
     if normal.try_normalize_mut(Num::default_epsilon()).is_none(){normal=SVector::zeros();}
 
@@ -376,18 +700,19 @@ fn make_outward_face<Num: RealField + Copy, const DIM: usize>(
     indices: &mut [usize; DIM],
     points: &[SVector<Num, DIM>],
     interior: &SVector<Num, DIM>,
-) -> (SVector<Num, DIM>, Num) {
+) -> (SVector<Num, DIM>, SVector<Num, DIM>, Num) {
     let verts: [SVector<Num, DIM>; DIM] = indices.map(|i| points[i]);
-    let mut normal = face_normal(&verts);
+    let mut edge_vector = generalized_cross(verts);
 
     // 朝内 ⟺ 内部点落在法线的正侧
-    if normal.dot(&(interior - verts[0])) > Num::zero() {
+    if edge_vector.dot(&(interior - verts[0])) > Num::zero() {
         indices.swap(0, 1);
-        normal = -normal;
+        edge_vector = -edge_vector;
     }
-
+    let mut normal=edge_vector;
+    if normal.try_normalize_mut(Num::default_epsilon()).is_none(){normal=SVector::zeros();}
     let offset = normal.dot(&verts[0]);
-    (normal, offset)
+    (edge_vector, normal, offset)
 }
 
 /// 在 DIM>3 时，用离 apex、a、b 仿射无关的点补齐面索引。
@@ -434,7 +759,7 @@ mod tests {
             SVector::<f64, 2>::new(0.0, 1.0),
             SVector::<f64, 2>::new(0.5, 0.5),
         ];
-        let hull = ConvexPolyhedron::quickhull(points).unwrap();
+        let hull = ConvexPolyhedron::new(points).unwrap();
 
         // println!("{:?}",hull);
 
@@ -470,7 +795,7 @@ mod tests {
             SVector::<f64, 3>::new(0.0, 1.0, 1.0),
             SVector::<f64, 3>::new(0.5, 0.5, 0.5),
         ];
-        let hull = ConvexPolyhedron::quickhull(points).unwrap();
+        let hull = ConvexPolyhedron::new(points).unwrap();
 
         // 3D 凸包的面是三角形
         for face in &hull.surfaces {
@@ -484,7 +809,7 @@ mod tests {
 
         // 每个面的法线应该是单位向量，且所有立方体顶点都在对应面的内部或负侧
         for face in &hull.surfaces {
-            assert!(approx_eq(face.normal.norm(), 1.0));
+            assert!(approx_eq(face.normal_vector.norm(), 1.0));
             for (i, &pi) in hull_vertices.iter().enumerate() {
                 let d = face.signed_distance(&hull.vertexes[pi]);
                 // 凸包上的点应满足 signed_distance <= eps
@@ -504,7 +829,7 @@ mod tests {
             }
             points.push(p);
         }
-        let hull = ConvexPolyhedron::quickhull(points).unwrap();
+        let hull = ConvexPolyhedron::new(points).unwrap();
 
         // 4D 凸包的面是四面体（4 个顶点）
         for face in &hull.surfaces {
@@ -518,7 +843,7 @@ mod tests {
 
         // 所有顶点都应满足所有面的半空间约束
         for face in &hull.surfaces {
-            assert!(approx_eq(face.normal.norm(), 1.0));
+            assert!(approx_eq(face.normal_vector.norm(), 1.0));
             for &pi in &hull_vertices {
                 let d = face.signed_distance(&hull.vertexes[pi]);
                 assert!(d <= 1e-9);
@@ -533,7 +858,7 @@ mod tests {
             SVector::<f64, 2>::new(1.0, 1.0),
             SVector::<f64, 2>::new(2.0, 2.0),
         ];
-        assert!(ConvexPolyhedron::<f64, 2>::quickhull(points).is_none());
+        assert!(ConvexPolyhedron::<f64, 2>::new(points).is_none());
     }
 
     #[test]
@@ -544,6 +869,6 @@ mod tests {
             SVector::<f64, 3>::new(0.0, 1.0, 0.0),
             SVector::<f64, 3>::new(1.0, 1.0, 0.0),
         ];
-        assert!(ConvexPolyhedron::<f64, 3>::quickhull(points).is_none());
+        assert!(ConvexPolyhedron::<f64, 3>::new(points).is_none());
     }
 }

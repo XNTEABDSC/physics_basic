@@ -1,9 +1,7 @@
 // pub use wacky_bag_fixed::num::*;
 
 use nalgebra::{Const, DefaultAllocator, DimMin, DimName, ToTypenum, allocator::Allocator};
-
-use crate::rotation::DimToSoDim;
-
+use crate::dimension::*;
 
 pub trait DimNameTrait:
 	where Self: DimName + DimMin<Self,Output = Self> + DimToSoDim + ToTypenum,

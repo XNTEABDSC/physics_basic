@@ -9,4 +9,5 @@ pub mod collide;
 pub mod linear_equation;
 pub mod utils;
 pub mod shape;
+pub mod dimension;
 // pub mod transform;

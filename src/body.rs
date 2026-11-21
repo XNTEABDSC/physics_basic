@@ -13,8 +13,8 @@ use wacky_bag::utils::factorial::factorial;
 use wacky_bag_hlist::h_list_helpers::{HToMut, HToRef, SetMut, Sum};
 
 use crate::stats::{Kinetic, Mass, Momentum, Pos, TimePass, Vel, Volume, mass_vel_2_kinetic};
-use crate::rotation::{AllocatorDimVMSoDimVM, AngularInertia, AngularKinetic, AngularMomentum, AngularVel, ConstDimToSoDimT, DimSquare, DimSquareSo, DimToSoDim, Rotation, RotationMatrix, angular_kinetic_from_inertia_agv, angular_momentum_from_omega, angular_velocity_from_momentum};
-
+use crate::rotation::{AngularInertia, AngularKinetic, AngularMomentum, AngularVel, Rotation, RotationMatrix, angular_kinetic_from_inertia_agv, angular_momentum_from_omega, angular_velocity_from_momentum};
+use crate::dimension::*;
 
 /** 
 `
