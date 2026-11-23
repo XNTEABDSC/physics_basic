@@ -1,5 +1,6 @@
 use approx::AbsDiffEq;
 use nalgebra::{Const, DefaultAllocator, OMatrix, OVector, RealField, SVector};
+use typenum::U2;
 use wacky_bag::utils::fn_as_index::FnAsIndex;
 use std::{array, collections::HashSet, ops::{ControlFlow::Continue, Deref, Index, IndexMut}, path::Iter};
 
@@ -62,7 +63,10 @@ impl<Num: RealField + Copy, const DIM: usize> ConvexPolyhedron<Num, DIM>
 where Const<DIM>:DimSquare
 {
     /// 从任意点集计算凸包。点数不足以构成 DIM 维单纯形时返回 `None`。
-    pub fn new(points: impl IntoIterator<Item = SVector<Num, DIM>>) -> Option<Self> {
+    pub fn new(points: impl IntoIterator<Item = SVector<Num, DIM>>) -> Option<Self> 
+    where Const<DIM>:DimToDimAdd1,
+        DefaultAllocator:Allocator<ConstDimToAdd1T<DIM>>+Allocator<Const<DIM>,Buffer<Num> = ArrayStorage<Num, DIM, 1>>
+    {
         assert!(DIM >= 2, "DIM 必须 >= 2");
 
         // 1. 去重
@@ -90,7 +94,7 @@ where Const<DIM>:DimSquare
 
         // 3. 将所有剩余点分配到可见面
         let mut unassigned: Vec<usize> = (0..hull.vertexes.len())
-            .filter(|i| !simplex.contains(i))
+            .filter(|i| !iter_contains(&simplex, i))
             .collect();
 
         for &pi in &unassigned {
@@ -143,7 +147,7 @@ where Const<DIM>:DimSquare
                 .flat_map(|f| f.outside.iter().copied())
                 .collect();
             for pi in 0..hull.vertexes.len() {
-                if pi == apex || simplex.contains(&pi) || assigned.contains(&pi) {
+                if pi == apex || iter_contains(&simplex,&pi) || assigned.contains(&pi) {
                     continue;
                 }
                 let p = hull.vertexes[pi];
@@ -164,12 +168,15 @@ where Const<DIM>:DimSquare
         Some(hull)
     }
 
-    fn build_initial_faces(&mut self, simplex: &ArrayChain<usize,DIM,1>) {
+    fn build_initial_faces(&mut self, simplex: &OVector<usize,ConstDimToAdd1T<DIM>>) 
+    where Const<DIM>:DimToDimAdd1,
+        DefaultAllocator:Allocator<ConstDimToAdd1T<DIM>>+Allocator<Const<DIM>,Buffer<Num> = ArrayStorage<Num, DIM, 1>>
+    {
         // 对每个 DIM 元子集构建一个面，法线方向由单纯形的重心决定
         let centroid = simplex
             .iter()
             .map(|&i| self.vertexes[i])
-            .fold(SVector::zeros(), |acc, p| acc + p)
+            .fold(SVector::<Num,DIM>::zeros(), |acc, p| acc + p)
             / Num::from_usize(simplex.len()).unwrap();
 
         for k in 0..=DIM {
@@ -383,9 +390,9 @@ where Const<DIM>:DimSquare
     /// 使用 GJK 判断 Minkowski 差 A - B 是否包含原点。
     pub fn intersects(&self, other: &Self) -> bool 
     where 
-        Const<DIM>:DimToDimAdd1,
-        DefaultAllocator:AllocatorVM<ConstDimToDimAdd1T<DIM>>,
-        ConstDimToDimAdd1T<DIM>:DimSquare
+        Const<DIM>:DimToAdd<U2>,
+        DefaultAllocator:AllocatorVM<ConstDimToAddT<DIM,U2>>,
+        ConstDimToAddT<DIM,U2>:DimSquare
     {
         let e = Self::eps();
 
@@ -448,12 +455,13 @@ where Const<DIM>:DimSquare
         points: &[SVector<Num, DIM>],
     ) -> (SVector<Num, DIM>, Vec<usize>) 
     where 
-        Const<DIM>:DimToDimAdd1,
-        DefaultAllocator:AllocatorVM<ConstDimToDimAdd1T<DIM>>,
-        ConstDimToDimAdd1T<DIM>:DimSquare
+        Const<DIM>:DimToAdd<U2>,
+        DefaultAllocator:AllocatorVM<ConstDimToAddT<DIM,U2>>,
+        ConstDimToAddT<DIM,U2>:DimSquare
     {
         let e = Self::eps();
         let n = points.len();
+        assert!(n<=DIM+1);
         let mut best_norm2: Option<Num> = None;
         let mut best_point = SVector::<Num, DIM>::zeros();
         let mut best_subset: Vec<usize> = vec![];
@@ -467,7 +475,13 @@ where Const<DIM>:DimSquare
             // [ G  1 ] [λ]   [0]
             // [ 1ᵀ 0 ] [μ] = [1]
             // 其中 G_{ij} = p_i · p_j
-            let mut mat = OMatrix::<Num,ConstDimToDimAdd1T<DIM>,ConstDimToDimAdd1T<DIM>>::zeros();
+            let mut mat = 
+                // OMatrix::<Num,ConstDimToAdd1T<DIM>,ConstDimToAdd1T<DIM>>::from_fn(|r,c|{
+                //     if r>0 {
+                        
+                //     }
+                // });
+                OMatrix::<Num,ConstDimToAddT<DIM,U2>,ConstDimToAddT<DIM,U2>>::identity();
             for i in 0..k {
                 for j in 0..k {
                     mat[(i, j)] = points[subset[i]].dot(&points[subset[j]]);
@@ -475,7 +489,9 @@ where Const<DIM>:DimSquare
                 mat[(i, k)] = Num::one();
                 mat[(k, i)] = Num::one();
             }
-            let mut rhs = OVector::<Num,ConstDimToDimAdd1T<DIM>>::zeros();
+            mat[(k,k)]=Num::zero();
+
+            let mut rhs = OVector::<Num,ConstDimToAddT<DIM,U2>>::zeros();
             rhs[k] = Num::one();
 
             if let Some(sol) = mat.lu().solve(&rhs) {
@@ -547,58 +563,24 @@ impl<Num: RealField + Copy, const DIM: usize> shape::Shape<Num,DIM> for ConvexPo
     type SurfaceCollection=Vec<Surface<Num, DIM>>;
 }
 
-struct ArrayChain<T,const N1:usize,const N2:usize>(pub [T;N1],pub [T;N2]);
-
-impl<T,const N1:usize,const N2:usize> ArrayChain<T,N1,N2>{
-    pub fn len(&self)->usize{N1+N2}
-    pub fn from_fn<F>(mut f:F)->Self
-    where F:FnMut(usize)->T
-    {
-        Self(
-            array::from_fn(&mut f),
-            array::from_fn(move |i|f(i+N1)) 
-        )
-    }
-    pub fn contains(&self,v:&T)->bool
-    where
-        T: PartialEq,
-    {
-        return self.0.contains(v) || self.1.contains(v);
-    }
-    pub fn iter(&self)->impl Iterator<Item=&T>{
-        self.0.iter().chain(self.1.iter())
-    }
+fn iter_contains<'a,T,C>(c:&'a C,v:&'a T)->bool
+where &'a C:IntoIterator<Item = &'a T>,
+    T:PartialEq
+{
+    c.into_iter().find(|a|*a==v).is_some()
 }
-
-impl<T,const N1:usize,const N2:usize> Index<usize> for ArrayChain<T,N1,N2> {
-    type Output=T;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        if index<N1 {
-            &self.0[index]
-        } else {
-            &self.1[index-N1]
-        }
-    }
-}
-impl<T,const N1:usize,const N2:usize> IndexMut<usize> for ArrayChain<T,N1,N2> {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        if index<N1 {
-            &mut self.0[index]
-        } else {
-            &mut self.1[index-N1]
-        }
-    }
-}
-
 
 /// 寻找 DIM+1 个仿射无关的点。
 fn find_initial_simplex<Num: RealField + Copy, const DIM: usize>(
     points: &[SVector<Num, DIM>],
-) -> Option<ArrayChain<usize,DIM,1>> {
+) -> Option<OVector<usize,ConstDimToAdd1T<DIM>>> 
+where Const<DIM>:DimToDimAdd1,
+    DefaultAllocator:Allocator<ConstDimToAdd1T<DIM>>+Allocator<Const<DIM>,Buffer<Num> = ArrayStorage<Num, DIM, 1>>
+
+{
     let n = points.len();
 
-    let mut chosen=ArrayChain::from_fn(|_|n+1);
+    let mut chosen=OVector::<usize,ConstDimToAdd1T<DIM>>::from_fn(|_,_|n+1);
     // // 第一个点：任意
     chosen[0] = 0;
 
@@ -606,7 +588,7 @@ fn find_initial_simplex<Num: RealField + Copy, const DIM: usize>(
         let base = &chosen;
         let mut found = None;
         for i in 0..n {
-            if base.contains(&i) {
+            if iter_contains(base, &i) {
                 continue;
             }
             // 检查是否与已有 k 个点仿射无关
@@ -870,5 +852,421 @@ mod tests {
             SVector::<f64, 3>::new(1.0, 1.0, 0.0),
         ];
         assert!(ConvexPolyhedron::<f64, 3>::new(points).is_none());
+    }
+
+    /// 测试用构造器：给定顶点和面（每个面是 DIM 个顶点索引），
+    /// 自动计算外向法线、offset、面中心。
+    /// 面顶点顺序任意，通过质心判断并翻转法线保证外向。
+    fn build_polyhedron<const DIM: usize>(
+        vertexes: Vec<SVector<f64, DIM>>,
+        faces: Vec<[usize; DIM]>,
+    ) -> ConvexPolyhedron<f64, DIM> {
+        let mut centroid = SVector::<f64, DIM>::zeros();
+        for v in &vertexes {
+            centroid += v;
+        }
+        centroid /= vertexes.len() as f64;
+
+        let mut surfaces = Vec::new();
+        for face in &faces {
+            let pts: Vec<SVector<f64, DIM>> = face.iter().map(|&i| vertexes[i]).collect();
+            let mut n = generalized_cross(pts.iter().cloned());
+            let len = n.norm();
+            assert!(len > 1e-12, "退化面");
+            n /= len;
+
+            let mut fc = SVector::<f64, DIM>::zeros();
+            for p in &pts {
+                fc += p;
+            }
+            fc /= DIM as f64;
+
+            // 保证法线外向
+            if n.dot(&(fc - centroid)) < 0.0 {
+                n = -n;
+            }
+            let offset = n.dot(&fc);
+
+            surfaces.push(Surface {
+                indices: *face,
+                normal_vector: n,
+                offset,
+                outside: Vec::new(),
+                edge_vector: SVector::<f64, DIM>::zeros(), // 测试中不依赖
+                area: 0.0,                                 // 测试中不依赖
+                center: fc,
+            });
+        }
+
+        ConvexPolyhedron {
+            vertexes,
+            surfaces,
+            volume: 0.0, // 测试中不依赖
+        }
+    }
+
+    fn assert_point_close<const DIM: usize>(a: &SVector<f64, DIM>, b: &SVector<f64, DIM>) {
+        assert!((a - b).norm() < 1e-6, "期望 {:?}，实际 {:?}", b, a);
+    }
+
+    fn assert_segment_close<const DIM: usize>(
+        seg: (SVector<f64, DIM>, SVector<f64, DIM>),
+        expected: (SVector<f64, DIM>, SVector<f64, DIM>),
+    ) {
+        let (p0, p1) = seg;
+        let (q0, q1) = expected;
+        let ok1 = (p0 - q0).norm() < 1e-6 && (p1 - q1).norm() < 1e-6;
+        let ok2 = (p0 - q1).norm() < 1e-6 && (p1 - q0).norm() < 1e-6;
+        assert!(ok1 || ok2, "期望线段 {:?}，实际 {:?}", expected, seg);
+    }
+
+    
+}
+
+#[cfg(test)]
+mod tests2 {
+    use super::*;
+    use approx::assert_relative_eq;
+    use nalgebra::{SVector, DMatrix, DVector};
+
+    // ---------------- 辅助构造函数 ----------------
+
+    fn surface2(
+        indices: [usize; 2],
+        normal: [f64; 2],
+        offset: f64,
+        area: f64,
+    ) -> Surface<f64, 2> {
+        let n: SVector<f64, 2> = SVector::from(normal);
+        Surface {
+            indices,
+            normal_vector: n,
+            offset,
+            outside: Vec::new(),
+            edge_vector: n * area,
+            area,
+            center: SVector::zeros(),
+        }
+    }
+
+    fn surface3(
+        indices: [usize; 3],
+        normal: [f64; 3],
+        offset: f64,
+        area: f64,
+    ) -> Surface<f64, 3> {
+        let n: SVector<f64, 3> = SVector::from(normal);
+        Surface {
+            indices,
+            normal_vector: n,
+            offset,
+            outside: Vec::new(),
+            edge_vector: n * area,
+            area,
+            center: SVector::zeros(),
+        }
+    }
+
+    /// 轴对齐正方形，中心 (cx, cy)，半边长 h。
+    fn make_square_at(cx: f64, cy: f64, h: f64) -> ConvexPolyhedron<f64, 2> {
+        let v = |x: f64, y: f64| -> SVector<f64, 2> {
+            SVector::from([cx + x * h, cy + y * h])
+        };
+        let vertexes = vec![
+            v(-1.0, -1.0),
+            v(1.0, -1.0),
+            v(1.0, 1.0),
+            v(-1.0, 1.0),
+        ];
+        let surfaces = vec![
+            // bottom: normal (0,-1), offset = -y_min = h - cy
+            surface2([0, 1], [0.0, -1.0], h - cy, 2.0 * h),
+            // right:  normal (1,0),  offset = x_max = cx + h
+            surface2([1, 2], [1.0, 0.0], cx + h, 2.0 * h),
+            // top:    normal (0,1),  offset = y_max = cy + h
+            surface2([2, 3], [0.0, 1.0], cy + h, 2.0 * h),
+            // left:   normal (-1,0), offset = -x_min = h - cx
+            surface2([3, 0], [-1.0, 0.0], h - cx, 2.0 * h),
+        ];
+        ConvexPolyhedron {
+            vertexes,
+            surfaces,
+            volume: 4.0 * h * h,
+        }
+    }
+
+    /// 轴对齐立方体，中心 c，半边长 h。
+    fn make_cube_at(c: [f64; 3], h: f64) -> ConvexPolyhedron<f64, 3> {
+        let v = |x: f64, y: f64, z: f64| -> SVector<f64, 3> {
+            SVector::from([c[0] + x * h, c[1] + y * h, c[2] + z * h])
+        };
+        let vertexes = vec![
+            v(-1.0, -1.0, -1.0), // 0
+            v(1.0, -1.0, -1.0),  // 1
+            v(1.0, 1.0, -1.0),   // 2
+            v(-1.0, 1.0, -1.0),  // 3
+            v(-1.0, -1.0, 1.0),  // 4
+            v(1.0, -1.0, 1.0),   // 5
+            v(1.0, 1.0, 1.0),    // 6
+            v(-1.0, 1.0, 1.0),   // 7
+        ];
+        let area_tri = 2.0 * h * h; // 每个正方形面被切成两个三角形
+        let off = |n: [f64; 3]| n[0] * c[0] + n[1] * c[1] + n[2] * c[2] + h;
+        let surfaces = vec![
+            // -z
+            surface3([0, 1, 2], [0.0, 0.0, -1.0], off([0.0, 0.0, -1.0]), area_tri),
+            surface3([0, 2, 3], [0.0, 0.0, -1.0], off([0.0, 0.0, -1.0]), area_tri),
+            // +z
+            surface3([4, 5, 6], [0.0, 0.0, 1.0], off([0.0, 0.0, 1.0]), area_tri),
+            surface3([4, 6, 7], [0.0, 0.0, 1.0], off([0.0, 0.0, 1.0]), area_tri),
+            // -y
+            surface3([0, 1, 5], [0.0, -1.0, 0.0], off([0.0, -1.0, 0.0]), area_tri),
+            surface3([0, 5, 4], [0.0, -1.0, 0.0], off([0.0, -1.0, 0.0]), area_tri),
+            // +y
+            surface3([2, 3, 7], [0.0, 1.0, 0.0], off([0.0, 1.0, 0.0]), area_tri),
+            surface3([2, 7, 6], [0.0, 1.0, 0.0], off([0.0, 1.0, 0.0]), area_tri),
+            // -x
+            surface3([0, 3, 7], [-1.0, 0.0, 0.0], off([-1.0, 0.0, 0.0]), area_tri),
+            surface3([0, 7, 4], [-1.0, 0.0, 0.0], off([-1.0, 0.0, 0.0]), area_tri),
+            // +x
+            surface3([1, 2, 6], [1.0, 0.0, 0.0], off([1.0, 0.0, 0.0]), area_tri),
+            surface3([1, 6, 5], [1.0, 0.0, 0.0], off([1.0, 0.0, 0.0]), area_tri),
+        ];
+        ConvexPolyhedron {
+            vertexes,
+            surfaces,
+            volume: (2.0 * h).powi(3),
+        }
+    }
+
+    fn approx(a: f64, b: f64) -> bool {
+        (a - b).abs() < 1e-7
+    }
+
+    // ---------------- contains_point ----------------
+
+    #[test]
+    fn square_contains_point() {
+        let sq = make_square_at(0.0, 0.0, 1.0);
+        // 内部
+        assert!(sq.contains_point(&SVector::from([0.0, 0.0])));
+        assert!(sq.contains_point(&SVector::from([0.5, -0.5])));
+        // 边界（含边界）
+        assert!(sq.contains_point(&SVector::from([1.0, 0.0])));
+        assert!(sq.contains_point(&SVector::from([-1.0, -1.0])));
+        // 外部
+        assert!(!sq.contains_point(&SVector::from([1.1, 0.0])));
+        assert!(!sq.contains_point(&SVector::from([0.0, -1.5])));
+        assert!(!sq.contains_point(&SVector::from([-2.0, 0.0])));
+    }
+
+    #[test]
+    fn square_contains_point_translated() {
+        let sq = make_square_at(3.0, -2.0, 0.5);
+        assert!(sq.contains_point(&SVector::from([3.0, -2.0])));
+        assert!(sq.contains_point(&SVector::from([3.5, -1.5])));
+        assert!(!sq.contains_point(&SVector::from([0.0, 0.0])));
+        assert!(!sq.contains_point(&SVector::from([3.0, -2.6])));
+    }
+
+    #[test]
+    fn cube_contains_point() {
+        let cube = make_cube_at([0.0, 0.0, 0.0], 1.0);
+        assert!(cube.contains_point(&SVector::from([0.0, 0.0, 0.0])));
+        assert!(cube.contains_point(&SVector::from([0.5, 0.5, 0.5])));
+        // 顶点
+        assert!(cube.contains_point(&SVector::from([1.0, 1.0, 1.0])));
+        // 外部
+        assert!(!cube.contains_point(&SVector::from([1.1, 0.0, 0.0])));
+        assert!(!cube.contains_point(&SVector::from([0.0, -1.2, 0.0])));
+        assert!(!cube.contains_point(&SVector::from([0.0, 0.0, 2.0])));
+    }
+
+    // ---------------- line_intersection ----------------
+
+    #[test]
+    fn square_line_intersection() {
+        let sq = make_square_at(0.0, 0.0, 1.0);
+
+        // 水平线 y = 0，方向 (1,0) → t ∈ [-1, 1]
+        let (t0, t1) = sq
+            .line_intersection(
+                &SVector::from([0.0, 0.0]),
+                &SVector::from([1.0, 0.0]),
+            )
+            .unwrap();
+        assert!(approx(t0, -1.0) && approx(t1, 1.0));
+
+        // 垂直线 x = 0，方向 (0,2) → t ∈ [-0.5, 0.5]
+        let (t0, t1) = sq
+            .line_intersection(
+                &SVector::from([0.0, 0.0]),
+                &SVector::from([0.0, 2.0]),
+            )
+            .unwrap();
+        assert!(approx(t0, -0.5) && approx(t1, 0.5));
+
+        // 对角线方向 (1,1) → t ∈ [-1, 1]
+        let (t0, t1) = sq
+            .line_intersection(
+                &SVector::from([0.0, 0.0]),
+                &SVector::from([1.0, 1.0]),
+            )
+            .unwrap();
+        assert!(approx(t0, -1.0) && approx(t1, 1.0));
+
+        // 与边 y = 1 相切（整条边）→ t ∈ [-1, 1]
+        let (t0, t1) = sq
+            .line_intersection(
+                &SVector::from([0.0, 1.0]),
+                &SVector::from([1.0, 0.0]),
+            )
+            .unwrap();
+        assert!(approx(t0, -1.0) && approx(t1, 1.0));
+
+        // 只与角点 (1,1) 相交 → t0 = t1 = 1
+        let (t0, t1) = sq
+            .line_intersection(
+                &SVector::from([2.0, 0.0]),
+                &SVector::from([-1.0, 1.0]),
+            )
+            .unwrap();
+        assert!(approx(t0, 1.0) && approx(t1, 1.0));
+
+        // 完全在外 → None
+        assert!(sq
+            .line_intersection(
+                &SVector::from([0.0, 2.0]),
+                &SVector::from([1.0, 0.0]),
+            )
+            .is_none());
+    }
+
+    #[test]
+    fn cube_line_intersection() {
+        let cube = make_cube_at([0.0, 0.0, 0.0], 1.0);
+
+        // 沿 x 轴 → t ∈ [-1, 1]
+        let (t0, t1) = cube
+            .line_intersection(
+                &SVector::from([0.0, 0.0, 0.0]),
+                &SVector::from([1.0, 0.0, 0.0]),
+            )
+            .unwrap();
+        assert!(approx(t0, -1.0) && approx(t1, 1.0));
+
+        // 沿 (1,1,1) → t ∈ [-1, 1]
+        let (t0, t1) = cube
+            .line_intersection(
+                &SVector::from([0.0, 0.0, 0.0]),
+                &SVector::from([1.0, 1.0, 1.0]),
+            )
+            .unwrap();
+        assert!(approx(t0, -1.0) && approx(t1, 1.0));
+
+        // 方向 (1,0,2)：z 方向先受限 → t ∈ [-0.5, 0.5]
+        let (t0, t1) = cube
+            .line_intersection(
+                &SVector::from([0.0, 0.0, 0.0]),
+                &SVector::from([1.0, 0.0, 2.0]),
+            )
+            .unwrap();
+        assert!(approx(t0, -0.5) && approx(t1, 0.5));
+
+        // 沿体对角线穿过一个角点 (2,2,2) 方向 (-1,-1,-1) → t = 1
+        let (t0, t1) = cube
+            .line_intersection(
+                &SVector::from([2.0, 2.0, 2.0]),
+                &SVector::from([-1.0, -1.0, -1.0]),
+            )
+            .unwrap();
+        // assert!(approx(t0, 1.0) && approx(t1, 1.0));
+        assert_relative_eq!(t0, 1.0);
+        assert_relative_eq!(t1, 3.0);
+
+        // 平行于面且在外 → None
+        assert!(cube
+            .line_intersection(
+                &SVector::from([0.0, 0.0, 2.0]),
+                &SVector::from([1.0, 0.0, 0.0]),
+            )
+            .is_none());
+
+        // 方向不平行于任何面但整体在外 → None
+        assert!(cube
+            .line_intersection(
+                &SVector::from([2.0, 2.0, 0.0]),
+                &SVector::from([1.0, 0.0, 0.0]),
+            )
+            .is_none());
+
+        // 方向为零向量且在内部：退化为点，实现返回 Some((t, t))，仅检查 Some
+        assert!(cube
+            .line_intersection(
+                &SVector::from([0.0, 0.0, 0.0]),
+                &SVector::from([0.0, 0.0, 0.0]),
+            )
+            .is_some());
+    }
+
+    // ---------------- intersects ----------------
+
+    #[test]
+    fn square_square_intersects() {
+        let a = make_square_at(0.0, 0.0, 1.0);
+
+        // 明显重叠：[−1,1] 与 [0,2] 在 x 上重叠
+        let b = make_square_at(1.0, 0.0, 1.0);
+        assert!(a.intersects(&b));
+        assert!(b.intersects(&a));
+
+        // 完全分离：[−1,1] 与 [2,4]
+        let c = make_square_at(3.0, 0.0, 1.0);
+        assert!(!a.intersects(&c));
+        assert!(!c.intersects(&a));
+
+        // 包含关系：小正方形在内部
+        let d = make_square_at(0.0, 0.0, 0.2);
+        assert!(a.intersects(&d));
+        assert!(d.intersects(&a));
+
+        // 对角分离
+        let e = make_square_at(3.0, 3.0, 1.0);
+        assert!(!a.intersects(&e));
+    }
+
+    #[test]
+    fn cube_cube_intersects() {
+        let a = make_cube_at([0.0, 0.0, 0.0], 1.0);
+
+        // 重叠：x 方向中心相距 1
+        let b = make_cube_at([1.0, 0.0, 0.0], 1.0);
+        assert!(a.intersects(&b));
+        assert!(b.intersects(&a));
+
+        // 分离
+        let c = make_cube_at([3.0, 0.0, 0.0], 1.0);
+        assert!(!a.intersects(&c));
+        assert!(!c.intersects(&a));
+
+        // 内部小立方体
+        let d = make_cube_at([0.5, 0.5, 0.5], 0.1);
+        assert!(a.intersects(&d));
+        assert!(d.intersects(&a));
+
+        // 三轴对角分离
+        let e = make_cube_at([3.0, 3.0, 3.0], 1.0);
+        assert!(!a.intersects(&e));
+    }
+
+    #[test]
+    fn cross_dimension_consistency_of_gjk() {
+        // 不同尺寸、位置组合的一致性：平移不变性
+        let a = make_cube_at([1.0, 2.0, 3.0], 0.5);
+        let b = make_cube_at([1.2, 2.2, 3.2], 0.5);
+        let c = make_cube_at([10.0, 10.0, 10.0], 0.5);
+        assert!(a.intersects(&b));
+        assert!(!a.intersects(&c));
+        assert!(!b.intersects(&c));
     }
 }

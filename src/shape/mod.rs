@@ -1,4 +1,5 @@
 pub mod convex_polyhedron;
+pub mod multi_convex;
 
 use std::{array, ops::{Deref, Index}, process::Output};
 

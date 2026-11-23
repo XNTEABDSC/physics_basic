@@ -6,7 +6,7 @@ use nalgebra::{
 use num_traits::{Num, Zero};
 use typenum::{U0, U1, U2};
 
-pub use nalgebra::{DefaultAllocator,allocator::Allocator,Const,DimName};
+pub use nalgebra::{DefaultAllocator,allocator::Allocator,Const,DimName,ArrayStorage};
 
 /// N -> N*(N-1)/2
 pub trait DimToSoDim:Dim
@@ -124,4 +124,31 @@ where
 
 
 pub type DimToDimAdd1T<Dim> = <Dim as DimToDimAdd1>::SoDim;
-pub type ConstDimToDimAdd1T<const DIM: usize> = <Const<DIM> as DimToDimAdd1>::SoDim;
+pub type ConstDimToAdd1T<const DIM: usize> = <Const<DIM> as DimToDimAdd1>::SoDim;
+
+
+pub trait DimToAdd<B>:Dim
+where
+    Self: ToTypenum<
+        Typenum: Add<B, Output : ToConst>,
+    >,
+{
+    type SoDim:Dim+DimName;
+    const SO_DIM: usize;
+}
+
+impl<const DIM: usize, NumAdd,B> DimToAdd<B> for Const<DIM>
+where
+    Self: ToTypenum<
+        Typenum: Add<B, Output = NumAdd>,
+    >,
+    NumAdd:ToConst
+{
+    type SoDim = NumAdd::Const;
+
+    const SO_DIM: usize = NumAdd::Const::DIM;
+}
+
+
+pub type DimToAddT<Dim,Typenum> = <Dim as DimToAdd<Typenum>>::SoDim;
+pub type ConstDimToAddT<const DIM: usize,Typenum> = <Const<DIM> as DimToAdd<Typenum>>::SoDim;
